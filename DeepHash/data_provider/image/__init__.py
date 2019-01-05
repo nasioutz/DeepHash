@@ -18,6 +18,7 @@
 import os
 import cv2
 import numpy as np
+from os.path import join
 
 
 # Process images of this size. Note that this differs from the original nus-wide
@@ -29,7 +30,7 @@ import numpy as np
 
 class Dataset(object):
     def __init__(self, modal, data_root, path, train=True):
-        self.lines = open(path, 'r').readlines()
+        self.lines = [join(line.split('/')[0], line.split('/')[1]) for line in open(path, 'r').readlines()]
         self.data_root = data_root
         self.n_samples = len(self.lines)
         self.train = train

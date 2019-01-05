@@ -9,7 +9,7 @@ class Dataset(object):
         self._output = np.zeros((self.n_samples, output_dim), dtype=np.float32)
 
         self._perm = np.arange(self.n_samples)
-        np.random.shuffle(self._perm)
+        #np.random.shuffle(self._perm)
         self._index_in_epoch = 0
         self._epochs_complete = 0
         print ("Dataset already")

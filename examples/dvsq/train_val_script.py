@@ -36,7 +36,7 @@ config = {
     'output_dim': output_dim,
 
     'R': Rs[_dataset],
-    'model_weights': '../../DeepHash/architecture/pretrained_model/reference_pretrain.npy',
+    'model_weights': '../../deephash/architecture/pretrained_model/reference_pretrain.npy',
 
     'img_model': 'alexnet',
     'loss_type': 'cos_softmargin_multi_label',

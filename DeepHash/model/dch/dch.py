@@ -5,6 +5,8 @@
 ##################################################################################
 
 import os
+from os.path import join
+import pickle
 import shutil
 import time
 from datetime import datetime
@@ -13,15 +15,15 @@ from math import ceil
 import numpy as np
 import tensorflow as tf
 
-import model.plot as plot
-from architecture import img_alexnet_layers
-from evaluation import MAPs
-
+import DeepHash.model.plot as plot
+from DeepHash.architecture import img_alexnet_layers
+from DeepHash.evaluation import MAPs
+from tqdm import trange
 
 class DCH(object):
     def __init__(self, config):
         ### Initialize setting
-        print ("initializing")
+        #print ("initializing")
         np.set_printoptions(precision=4)
 
         with tf.name_scope('stage'):
@@ -36,10 +38,11 @@ class DCH(object):
                 self.bias,
                 self.gamma,
                 self.dataset)
+        self.file_name = "model_weights"
+        self.save_dir = join(self.snapshot_folder, self.save_dir)
         self.save_file = os.path.join(self.save_dir, self.file_name + '.npy')
 
         ### Setup session
-        print ("launching session")
         configProto = tf.ConfigProto()
         configProto.gpu_options.allow_growth = True
         configProto.allow_soft_placement = True
@@ -122,8 +125,7 @@ class DCH(object):
         s_mask = tf.boolean_mask(s, mask)
         balance_p_mask = tf.boolean_mask(balance_param, mask)
 
-        all_loss = - s_mask * \
-            tf.log(cauchy_mask) - (tf.constant(1.0) - s_mask) * \
+        all_loss = - s_mask * tf.log(cauchy_mask) - (tf.constant(1.0) - s_mask) * \
             tf.log(tf.constant(1.0) - cauchy_mask)
 
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
@@ -172,81 +174,112 @@ class DCH(object):
                                         (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
 
     def train(self, img_dataset):
-        print("%s #train# start training" % datetime.now())
 
         ### tensorboard
-        tflog_path = os.path.join(self.log_dir, self.file_name)
+        tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
         if os.path.exists(tflog_path):
             shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
-
-        for train_iter in range(self.iter_num):
+        t_range = trange(self.iter_num, desc="Starting Training", leave=True)
+        for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
-            start_time = time.time()
 
-            _, loss, cos_loss, output, summary = self.sess.run([self.train_op, self.loss, self.cos_loss, self.img_last_layer, self.merged],
-                                    feed_dict={self.img: images,
-                                               self.img_label: labels})
+            _, loss, cos_loss, output, summary = self.sess.run(
+
+                                        [self.train_op, self.loss, self.cos_loss, self.img_last_layer, self.merged],
+                                        feed_dict={self.img: images, self.img_label: labels}
+                                    )
 
             train_writer.add_summary(summary, train_iter)
 
             img_dataset.feed_batch_output(self.batch_size, output)
-            duration = time.time() - start_time
 
-            if train_iter % 100 == 0:
-                print("%s #train# step %4d, loss = %.4f, cross_entropy loss = %.4f, %.1f sec/batch"
-                        %(datetime.now(), train_iter+1, loss, cos_loss, duration))
+            q_loss = loss - cos_loss
+            t_range.set_description(
+                                  "Training Model | Loss = {:2f}, Cross_Entropy Loss = {:2f}, Quantization_loss = {:2f}"
+                                  .format(loss, cos_loss, q_loss))
+            t_range.refresh()
 
-        print("%s #traing# finish training" % datetime.now())
+
         self.save_model()
-        print ("model saved")
+        print("model saved")
 
         self.sess.close()
 
     def validation(self, img_query, img_database, R=100):
-        print("%s #validation# start validation" % (datetime.now()))
+
+        if os.path.exists(self.save_dir) is False:
+            os.makedirs(self.save_dir)
+
         query_batch = int(ceil(img_query.n_samples / float(self.val_batch_size)))
         img_query.finish_epoch()
-        print("%s #validation# totally %d query in %d batches" % (datetime.now(), img_query.n_samples, query_batch))
-        for i in range(query_batch):
+
+        q_range = trange(query_batch, desc="Starting Query Set Evaluation", leave=True)
+        for i in q_range:
+
             images, labels = img_query.next_batch(self.val_batch_size)
-            output, loss = self.sess.run([self.img_last_layer, self.cos_loss],
-                                   feed_dict={self.img: images,
-                                              self.img_label: labels,
-                                              self.stage: 1})
+
+            output, loss = self.sess.run(
+
+                                   [self.img_last_layer, self.cos_loss],
+                                   feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+                                   )
+
             img_query.feed_batch_output(self.val_batch_size, output)
-            print('Cosine Loss: %s'%loss)
+
+            q_range.set_description('Evaluating Query | Cosine Loss: %s' % loss)
+            q_range.refresh()
+
+        with open(join(self.save_dir, 'img_query.pkl'), 'wb') as output:
+            pickle.dump(img_query, output, pickle.HIGHEST_PROTOCOL)
 
         database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
         img_database.finish_epoch()
-        print("%s #validation# totally %d database in %d batches" % (datetime.now(), img_database.n_samples, database_batch))
-        for i in range(database_batch):
+
+        d_range = trange(database_batch, desc="Starting Database Evaluation", leave=True)
+
+        for i in d_range:
             images, labels = img_database.next_batch(self.val_batch_size)
 
-            output, loss = self.sess.run([self.img_last_layer, self.cos_loss],
-                                         feed_dict={self.img: images,
-                                                    self.img_label: labels,
-                                                    self.stage: 1})
+            output, loss = self.sess.run(
+
+                                        [self.img_last_layer, self.cos_loss],
+                                        feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+                                        )
+
             img_database.feed_batch_output(self.val_batch_size, output)
-            if i % 100 == 0:
-                print('Cosine Loss[%d/%d]: %s'%(i, database_batch, loss))
+
+            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+            d_range.refresh()
+
+        with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
+            pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
 
         mAPs = MAPs(R)
 
         self.sess.close()
-        prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
-        for i in range(self.output_dim+1):
-            #prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
-            plot.plot('prec', prec[i])
-            plot.plot('rec', rec[i])
-            plot.plot('mAP', mmap[i])
-            plot.tick()
-            print('Results ham dist [%d], prec:%s, rec:%s, mAP:%s'%(i, prec[i], rec[i], mmap[i]))
 
-        result_save_dir = os.path.join(self.save_dir, self.file_name)
-        if os.path.exists(result_save_dir) is False:
-            os.makedirs(result_save_dir)
-        plot.flush(result_save_dir)
+        if self.evaluate_all_radiuses:
+
+            # prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
+
+            m_range = trange(self.output_dim+1, desc="Description Placeholder", leave=True)
+            for i in m_range:
+                prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
+                plot.plot('prec', prec[i])
+                plot.plot('rec', rec[i])
+                plot.plot('mAP', mmap[i])
+                plot.tick()
+                d_range.set_description(
+                    'Results ham dist [{}], prec:{}, rec:%{}, mAP:%{}'.format(i, prec[i], rec[i], mmap[i]))
+                d_range.refresh()
+                open(self.log_file, "a").writelines(
+                    'Results ham dist [{}], prec:{}, rec:%{}, mAP:%{}'.format(i, prec[i], rec[i], mmap[i]))
+
+            result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+            if os.path.exists(result_save_dir) is False:
+                os.makedirs(result_save_dir)
+            plot.flush(result_save_dir)
 
         prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
         return {

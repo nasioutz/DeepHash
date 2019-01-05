@@ -7,9 +7,9 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
     deep_param_img = {}
     train_layers = []
     train_last_layer = []
-    print("loading img model from %s" % model_weights)
+    #print("loading img model from %s" % model_weights)
     net_data = dict(np.load(model_weights, encoding='bytes').item())
-    print(list(net_data.keys()))
+    #print(list(net_data.keys()))
 
     # swap(2,1,0), bgr -> rgb
     reshaped_image = tf.cast(img, tf.float32)[:, :, :, ::-1]
@@ -229,7 +229,7 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
         deep_param_img['fc8'] = [fc8w, fc8b]
         train_last_layer += [fc8w, fc8b]
 
-    print("img model loading finished")
+    #print("img model loading finished")
     # Return outputs
     return fc8, deep_param_img, train_layers, train_last_layer
 

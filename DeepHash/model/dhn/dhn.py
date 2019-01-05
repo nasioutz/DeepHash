@@ -9,14 +9,14 @@ import shutil
 import time
 from datetime import datetime
 from math import ceil
-
 import numpy as np
 import tensorflow as tf
 
-from architecture import img_alexnet_layers
-from evaluation import MAPs
-from .util import Dataset
-
+from DeepHash.architecture import img_alexnet_layers
+from DeepHash.evaluation import MAPs
+from DeepHash.model.dhn.util import Dataset
+from tqdm import tqdm
+from tqdm import trange
 
 class DHN(object):
     def __init__(self, config):
@@ -97,6 +97,10 @@ class DHN(object):
     @staticmethod
     def cross_entropy(u, label_u, alpha=0.5, normed=False):
 
+
+
+
+
         label_ip = tf.cast(
             tf.matmul(label_u, tf.transpose(label_u)), tf.float32)
         s = tf.clip_by_value(label_ip, 0.0, 1.0)
@@ -120,7 +124,9 @@ class DHN(object):
             ip = tf.div(ip_1, mod_1)
         else:
             ip = tf.clip_by_value(tf.matmul(u, tf.transpose(u)), -1.5e1, 1.5e1)
+
         ones = tf.ones([tf.shape(u)[0], tf.shape(u)[0]])
+
         return tf.reduce_mean(tf.multiply(tf.log(ones + tf.exp(alpha * ip)) - s * alpha * ip, balance_param))
 
     def apply_loss_function(self, global_step):
@@ -132,8 +138,7 @@ class DHN(object):
             self.cos_loss = self.cross_entropy(
                 self.img_last_layer, self.img_label, self.alpha, True)
 
-        self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(
-            tf.abs(self.img_last_layer), tf.constant(1.0))))
+        self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
         self.q_lambda = tf.Variable(self.cq_lambda, name='cq_lambda')
         self.q_loss = tf.multiply(self.q_lambda, self.q_loss_img)
         self.loss = self.cos_loss + self.q_loss
@@ -185,8 +190,8 @@ class DHN(object):
         if os.path.exists(tflog_path):
             shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
-
-        for train_iter in range(self.max_iter):
+        t_range = trange(self.max_iter, desc="Description Placeholder", leave=True)
+        for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
             start_time = time.time()
 
@@ -202,9 +207,16 @@ class DHN(object):
             img_dataset.feed_batch_output(self.batch_size, output)
             duration = time.time() - start_time
 
+            t_range.set_description("%s #train# step %4d, loss = %.4f, cross_entropy loss = %.4f, %.1f sec/batch"
+                      % (datetime.now(), train_iter + 1, loss, cos_loss, duration))
+            t_range.refresh()
+
+            '''
             if train_iter % 1 == 0:
+                pass
                 print("%s #train# step %4d, loss = %.4f, cross_entropy loss = %.4f, %.1f sec/batch"
                       % (datetime.now(), train_iter + 1, loss, cos_loss, duration))
+            '''
 
         print("%s #traing# finish training" % datetime.now())
         self.save_model()
@@ -216,25 +228,37 @@ class DHN(object):
         print("%s #validation# start validation" % (datetime.now()))
         query_batch = int(ceil(img_query.n_samples / self.val_batch_size))
         print("%s #validation# totally %d query in %d batches" % (datetime.now(), img_query.n_samples, query_batch))
-        for i in range(query_batch):
+        q_range = trange(query_batch, desc="Description Placeholder", leave=True)
+        for i in q_range:
             images, labels = img_query.next_batch(self.val_batch_size)
             output, loss = self.sess.run([self.img_last_layer, self.cos_loss],
                                          feed_dict={self.img: images, self.img_label: labels, self.stage: 1})
             img_query.feed_batch_output(self.val_batch_size, output)
-            print('Cosine Loss: %s' % loss)
+
+            q_range.set_description('Cosine Loss: %s' % loss)
+            q_range.refresh()
+
+            #print('Cosine Loss: %s' % loss)
 
         database_batch = int(ceil(img_database.n_samples / self.val_batch_size))
         print("%s #validation# totally %d database in %d batches" %
               (datetime.now(), img_database.n_samples, database_batch))
-        for i in range(database_batch):
+        d_range = trange(database_batch, desc="Description Placeholder", leave=True)
+        for i in d_range:
             images, labels = img_database.next_batch(self.val_batch_size)
 
             output, loss = self.sess.run([self.img_last_layer, self.cos_loss],
                                          feed_dict={self.img: images, self.img_label: labels, self.stage: 1})
             img_database.feed_batch_output(self.val_batch_size, output)
             # print output[:10, :10]
+
+            d_range.set_description('Cosine Loss[%d/%d]: %s' % (i, database_batch, loss))
+            d_range.refresh()
+
+            '''
             if i % 100 == 0:
                 print('Cosine Loss[%d/%d]: %s' % (i, database_batch, loss))
+            '''
 
         mAPs = MAPs(R)
 

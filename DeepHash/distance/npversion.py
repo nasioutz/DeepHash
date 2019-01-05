@@ -1,6 +1,6 @@
 import numpy as np
 import sys
-import util
+import DeepHash.util
 
 def norm(x, keepdims=False):
     '''

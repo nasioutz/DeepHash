@@ -35,7 +35,7 @@ config = {
     'output_dim': output_dim,
 
     'R': 5,
-    'model_weights': '../../DeepHash/architecture/pretrained_model/reference_pretrain.npy',
+    'model_weights': '../../deephash/architecture/pretrained_model/reference_pretrain.npy',
 
     'img_model': 'alexnet',
 

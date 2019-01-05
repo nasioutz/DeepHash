@@ -1,7 +1,7 @@
 import numpy as np
-
-from distance.npversion import distance
-from util import sign
+from tqdm import trange, tqdm
+from DeepHash.distance.npversion import distance
+from DeepHash.util import sign
 
 
 # optimized
@@ -9,7 +9,8 @@ def get_mAPs(q_output, q_labels, db_output, db_labels, Rs, dist_type):
     dist = distance(q_output, db_output, dist_type=dist_type, pair=True)
     unsorted_ids = np.argpartition(dist, Rs - 1)[:, :Rs]
     APx = []
-    for i in range(dist.shape[0]):
+    t_range = trange(dist.shape[0], desc="get_mAPS", leave=True)
+    for i in t_range:
         label = q_labels[i, :]
         label[label == 0] = -1
         idx = unsorted_ids[i, :]
@@ -35,7 +36,8 @@ def get_mAPs_rerank(q_output, q_labels, db_output, db_labels, Rs, dist_type):
     mAPX = []
     query_labels = q_labels
     database_labels = db_labels
-    for i in range(ips.shape[0]):
+    t_range = trange(ips.shape[0], desc="get_mAPS_rerank", leave=True)
+    for i in t_range:
         label = query_labels[i, :]
         label[label == 0] = -1
 
@@ -102,7 +104,8 @@ class MAPs:
         query_labels = query.label
         database_labels = database.label
 
-        for i in range(ips.shape[0]):
+        t_range = trange(ips.shape[0], desc="Calculating mAP @H<=" + str(radius), leave=True)
+        for i in t_range:
             label = query_labels[i, :]
             label[label == 0] = -1
             idx = np.reshape(np.argwhere(ips[i, :] <= radius), (-1))
@@ -157,7 +160,7 @@ class MAPs:
 
         ids = np.argsort(ips, 1)
 
-        for i in range(ips.shape[0]):
+        for i in tqdm(range(ips.shape[0])):
             label = query_labels[i, :]
             label[label == 0] = -1
 
@@ -167,7 +170,7 @@ class MAPs:
 
             counts = np.bincount(ips[i, :].astype(np.int64))
 
-            for r in range(bit_n + 1):
+            for r in tqdm(range(bit_n + 1)):
                 if r >= len(counts):
                     precX[i, r] = precX[i, r - 1]
                     recX[i, r] = recX[i, r - 1]

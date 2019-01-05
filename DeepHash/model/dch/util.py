@@ -2,7 +2,7 @@ import numpy as np
 
 class Dataset(object):
     def __init__(self, dataset, output_dim):
-        print ("Initializing Dataset")
+        #print ("Initializing Dataset")
         self._dataset = dataset
         self.n_samples = dataset.n_samples
         self._train = dataset.train
@@ -12,7 +12,7 @@ class Dataset(object):
         np.random.shuffle(self._perm)
         self._index_in_epoch = 0
         self._epochs_complete = 0
-        print ("Dataset already")
+        #print ("Dataset already")
         return
 
     def next_batch(self, batch_size):
