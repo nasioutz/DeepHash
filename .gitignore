@@ -111,3 +111,5 @@ models/
 .idea/inspectionProfiles/Project_Default.xml
 .idea/encodings.xml
 .idea/deephash.iml
+DeepHash/examples/dhn/lr_5e-05_cqlambda_0.0_alpha_10.0_dataset_nuswide_81/events.out.tfevents.1544714132.aideep-1
+DeepHash/examples/dhn/lr_5e-05_cqlambda_0.0_alpha_10.0_dataset_nuswide_81/events.out.tfevents.1544126021.BLACK-CITADEL

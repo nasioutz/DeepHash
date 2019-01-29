@@ -12,12 +12,14 @@ import time
 from datetime import datetime
 from math import ceil
 
+
 import numpy as np
 import tensorflow as tf
 
 import DeepHash.model.plot as plot
 from DeepHash.architecture import img_alexnet_layers
 from DeepHash.evaluation import MAPs
+import DeepHash.distance.tfversion as distance
 from tqdm import trange
 
 class DCH(object):
@@ -52,6 +54,15 @@ class DCH(object):
         self.img = tf.placeholder(tf.float32, [None, 256, 256, 3])
         self.img_label = tf.placeholder(tf.float32, [None, self.label_dim])
         self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = self.load_model()
+
+        if config.reg_layer == 'hash':
+            self.regularization_layer = self.img_last_layer
+        elif config.reg_layer == 'fc6':
+            self.regularization_layer = self.train_layers[10]
+        elif config.reg_layer == 'fc7':
+            self.regularization_layer = self.train_layers[12]
+        elif config.reg_layer == 'conv5':
+            self.regularization_layer = self.train_layers[8]
 
         self.global_step = tf.Variable(0, trainable=False)
         self.train_op = self.apply_loss_function(self.global_step)
@@ -91,9 +102,20 @@ class DCH(object):
             v = u
             label_v = label_u
 
-        label_ip = tf.cast(
-            tf.matmul(label_u, tf.transpose(label_v)), tf.float32)
-        s = tf.clip_by_value(label_ip, 0.0, 1.0)
+        if self.unsupervised:
+            '''
+            label_ip = tf.cast(
+                tf.matmul(tf.sign(u), tf.transpose(tf.sign(v))), tf.float32)
+            s = tf.clip_by_value(label_ip, 0.0, 1.0)
+            '''
+            #label_ip = tf.cast(tf.matmul(tf.sign(u), tf.transpose(tf.sign(v))), tf.float32)
+            label_ip = tf.cast(tf.matmul(u, tf.transpose(v)), tf.float32)
+            label_ip = (self.output_dim - label_ip)/2
+            s = tf.cast((label_ip > self.output_dim * 0.50), tf.float32)
+        else:
+            label_ip = tf.cast(
+                tf.matmul(label_u, tf.transpose(label_v)), tf.float32)
+            s = tf.clip_by_value(label_ip, 0.0, 1.0)
 
         if normed:
             ip_1 = tf.matmul(u, tf.transpose(v))
@@ -130,13 +152,36 @@ class DCH(object):
 
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
 
+    def regul_layer(self):
+
+        if self.reg_layer == 'hash':
+            return self.img_last_layer
+        elif self.reg_layer == 'fc6':
+            return self.train_layers[10]
+        elif self.reg_layer == 'fc7':
+            return self.train_layers[12]
+        elif self.reg_layer == 'conv5':
+            return self.train_layers[8]
+
+    def regularizing_loss(self, u, label_u):
+
+        if self.regularizer == 'average':
+            return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
+        elif self.regularizer == 'min_distance':
+            return tf.reduce_mean(tf.norm(tf.math.subtract(u[tf.math.top_k(-tf.norm(u, axis=0), 1).indices[0]],u),axis=1))
+        else:
+            return 0.0
+
+
     def apply_loss_function(self, global_step):
         ### loss function
         self.cos_loss = self.cauchy_cross_entropy(self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
+        self.reg_loss_img = self.regularizing_loss(self.regul_layer(), self.img_label)
 
         self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
         self.q_loss = self.q_lambda * self.q_loss_img
-        self.loss = self.cos_loss + self.q_loss
+        self.reg_loss =  self.reg_loss_img * self.regularization_factor
+        self.loss = self.cos_loss + self.q_loss + self.reg_loss
 
         ### Last layer has a 10 times learning rate
         lr = tf.train.exponential_decay(self.lr, global_step, self.decay_step, self.lr, staircase=True)
@@ -184,9 +229,12 @@ class DCH(object):
         for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
 
-            _, loss, cos_loss, output, summary = self.sess.run(
+            #self.regularization_layer = tf.print(self.regularization_layer, [self.regularization_layer], message='Regularization Layer: ')
+            #self.img_last_layer = tf.print(self.img_last_layer, [self.img_last_layer], message='Last Layer: ')
 
-                                        [self.train_op, self.loss, self.cos_loss, self.img_last_layer, self.merged],
+            _, loss, cos_loss, reg_loss, output, reg_output, summary = self.sess.run(
+
+                                        [self.train_op, self.loss, self.cos_loss, self.reg_loss, self.img_last_layer, self.regularization_layer, self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -196,8 +244,8 @@ class DCH(object):
 
             q_loss = loss - cos_loss
             t_range.set_description(
-                                  "Training Model | Loss = {:2f}, Cross_Entropy Loss = {:2f}, Quantization_loss = {:2f}"
-                                  .format(loss, cos_loss, q_loss))
+                                  "Training Model | Loss = {:2f}, Cross_Entropy Loss = {:2f}, Quantization_Loss = {:2f}, Regularization Loss = {:2f}"
+                                  .format(loss, cos_loss, q_loss, reg_loss))
             t_range.refresh()
 
 
