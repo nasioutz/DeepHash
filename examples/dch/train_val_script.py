@@ -29,17 +29,21 @@ class Arguments:
     def __init__(self, lr=0.005, output_dim=64, alpha=0.5, bias=0.0, gamma=20, iter_num=2000, q_lambda=0.0, dataset='nuswide_81',gpus='0',
                        log_dir='tflog', batch_size=128, val_batch_size=16, decay_step=10000,decay_factor=0.1, with_tanh=True,
                        img_model='alexnet', model_weights=join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy'),
-                       finetune_all=True, save_dir='models',data_dir='data', evaluate=True, evaluate_all_radiuses=True,
-                       reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False):
+                       finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate_only=True, evaluate_all_radiuses=True,
+                       reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
+                       pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False):
 
 
         self.dataset = dataset
         self.output_dim = output_dim
         self.unsupervised = unsupervised
+        self.pretrain = pretrain
+        self.pretrn_layer = pretrn_layer
 
         self.gamma = gamma
         self.q_lambda = q_lambda
 
+        self.pretrain_lr = pretrain_lr
         self.lr = lr
         self.decay_factor = decay_factor
         self.decay_step = decay_step
@@ -53,11 +57,12 @@ class Arguments:
         self.val_batch_size = val_batch_size
 
         self.random_query = random_query
-        self.evaluate = evaluate
+        self.evaluate_only = evaluate_only
         self.evaluate_all_radiuses = evaluate_all_radiuses
 
         self.model_weights = model_weights
         self.finetune_all = finetune_all
+
 
         self.img_model = img_model
         self.alpha = alpha
@@ -68,6 +73,7 @@ class Arguments:
         self.log_dir = log_dir
         self.save_dir = save_dir
         self.data_dir = data_dir
+        self.save_evaluation_models = save_evaluation_models
 
         self.R = None
         self.label_dim = None
@@ -83,6 +89,11 @@ class Arguments:
             os.makedirs(join(self.snapshot_folder))
         self.log_file = join(self.snapshot_folder, "log.txt")
 
+        if pretrain:
+            self.pretrain_model_weights = join(self.snapshot_folder, 'models', 'model_weights_pretrain.npy')
+        else:
+            self.pretrain_model_weights = None
+
         sleep(2)
 
 
@@ -93,15 +104,15 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
-                     evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     evaluate_only=False, finetune_all=False, evaluate_all_radiuses=False, random_query=False,
+                     pretrain=False, pretrn_layer='fc7', pretrain_lr=0.00000000005,
+                     batch_size=256, val_batch_size=16, iter_num=1000,
                      lr=0.0005, decay_step=2000, decay_factor=0.9,
                      gamma=20, q_lambda=0.0,
-                     regularization_factor=0.00025, regularizer='average', reg_layer='hash',
+                     regularization_factor=0.0, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     #model_weights=join("2019_1_7_1_12_34", 'models', 'model_weights.npy')
+                     #model_weights=join("2019_2_21_13_36_6", 'models', 'model_weights_pretrain.npy')
                      ))
-
 
 
 #args = parser.parse_args()
@@ -130,7 +141,7 @@ for args in argument_list:
     if args.random_query:
         query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
 
-    if not args.evaluate:
+    if not args.evaluate_only:
         model_weights = model.train(train_img, database_img, query_img, args)
         args.model_weights = model_weights
 
