@@ -104,11 +104,11 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
-                     evaluate_only=False, finetune_all=False, evaluate_all_radiuses=False, random_query=False,
-                     pretrain=False, pretrn_layer='fc7', pretrain_lr=0.00000000005,
-                     batch_size=256, val_batch_size=16, iter_num=1000,
-                     lr=0.0005, decay_step=2000, decay_factor=0.9,
-                     gamma=20, q_lambda=0.0,
+                     evaluate_only=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     pretrain=True, pretrn_layer='conv5', pretrain_lr=5e-13,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.001, decay_step=2000, decay_factor=0.9,
+                     gamma=10, q_lambda=0.0,
                      regularization_factor=0.0, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_2_21_13_36_6", 'models', 'model_weights_pretrain.npy')

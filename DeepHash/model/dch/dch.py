@@ -17,8 +17,7 @@ import numpy as np
 import tensorflow as tf
 
 import DeepHash.model.plot as plot
-from DeepHash.architecture import img_alexnet_layers
-from DeepHash.architecture import img_alexnet_layers_pretrain
+from DeepHash.architecture import *
 from DeepHash.evaluation import MAPs
 import DeepHash.distance.tfversion as tfdist
 from tqdm import trange
@@ -68,7 +67,10 @@ class DCH(object):
         self.global_step = tf.Variable(0, trainable=False)
 
         if self.pretrain:
-            self.train_op = self.apply_pretrain_loss_function(self.global_step)
+            if self.pretrn_layer == 'fc7':
+                self.train_op = self.apply_pretrain_conv5_loss_function(self.global_step)
+            elif self.pretrn_layer == 'conv5':
+                self.train_op = self.apply_pretrain_conv5_loss_function(self.global_step)
         else:
             self.train_op = self.apply_loss_function(self.global_step)
 
@@ -78,14 +80,24 @@ class DCH(object):
     def load_model(self,pretrain=False):
         if self.img_model == 'alexnet':
             if pretrain:
-                img_output = img_alexnet_layers_pretrain(
-                    self.img,
-                    self.batch_size,
-                    self.output_dim,
-                    self.stage,
-                    self.model_weights,
-                    self.with_tanh,
-                    self.val_batch_size)
+                if self.pretrn_layer == 'fc7':
+                    img_output = img_alexnet_layers_pretrain_fc7(
+                        self.img,
+                        self.batch_size,
+                        self.output_dim,
+                        self.stage,
+                        self.model_weights,
+                        self.with_tanh,
+                        self.val_batch_size)
+                elif self.pretrn_layer == 'conv5':
+                    img_output = img_alexnet_layers_pretrain_conv5(
+                        self.img,
+                        self.batch_size,
+                        self.output_dim,
+                        self.stage,
+                        self.model_weights,
+                        self.with_tanh,
+                        self.val_batch_size)
             else:
                 img_output = img_alexnet_layers(
                         self.img,
@@ -97,6 +109,7 @@ class DCH(object):
                         self.val_batch_size)
         else:
             raise Exception('cannot use such CNN model as ' + self.img_model)
+
         return img_output
 
     def save_model(self, model_file=None,pretrain=False):
@@ -289,7 +302,7 @@ class DCH(object):
             return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
                                         (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
 
-    def apply_pretrain_loss_function(self, global_step):
+    def apply_pretrain_fc7_loss_function(self, global_step):
         ### loss function
         self.eucl_loss = self.euclidian_loss_alternative(self.img_last_layer, self.img_label, normed=False)
         self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
@@ -324,10 +337,47 @@ class DCH(object):
                                         (grads_and_vars[9][0]*2, self.train_layers[9]),
                                         (grads_and_vars[10][0], self.train_layers[10]),
                                         (grads_and_vars[11][0]*2, self.train_layers[11]),
-                                        (fcgrad*1, self.train_last_layer[0]),
+                                        (fcgrad, self.train_last_layer[0]),
                                         (fbgrad*2, self.train_last_layer[1])], global_step=global_step)
         else:
-            return opt.apply_gradients([(fcgrad*1, self.train_last_layer[0]),
+            return opt.apply_gradients([(fcgrad, self.train_last_layer[0]),
+                                        (fbgrad*2, self.train_last_layer[1])], global_step=global_step)
+
+    def apply_pretrain_conv5_loss_function(self, global_step):
+        ### loss function
+        self.eucl_loss = self.euclidian_loss_alternative(self.img_last_layer, self.img_label, normed=False)
+        self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
+
+        self.reg_loss = self.reg_loss_img * self.regularization_factor
+        self.loss = self.eucl_loss + self.reg_loss
+
+        ### Last layer has a 10 times learning rate
+        lr = tf.train.exponential_decay(self.pretrain_lr, global_step, self.decay_step, self.pretrain_lr, staircase=True)
+        opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9)
+        grads_and_vars = opt.compute_gradients(self.loss, self.train_layers+self.train_last_layer)
+        fcgrad, _ = grads_and_vars[-2]
+        fbgrad, _ = grads_and_vars[-1]
+
+        self.grads_and_vars = grads_and_vars
+        tf.summary.scalar('loss', self.loss)
+        tf.summary.scalar('cos_loss', self.eucl_loss)
+        tf.summary.scalar('q_loss', self.reg_loss)
+        tf.summary.scalar('lr', lr)
+        self.merged = tf.summary.merge_all()
+
+        if self.finetune_all:
+            return opt.apply_gradients([(grads_and_vars[0][0], self.train_layers[0]),
+                                        (grads_and_vars[1][0]*2, self.train_layers[1]),
+                                        (grads_and_vars[2][0], self.train_layers[2]),
+                                        (grads_and_vars[3][0]*2, self.train_layers[3]),
+                                        (grads_and_vars[4][0], self.train_layers[4]),
+                                        (grads_and_vars[5][0]*2, self.train_layers[5]),
+                                        (grads_and_vars[6][0], self.train_layers[6]),
+                                        (grads_and_vars[7][0]*2, self.train_layers[7]),
+                                        (fcgrad, self.train_last_layer[0]),
+                                        (fbgrad*2, self.train_last_layer[1])], global_step=global_step)
+        else:
+            return opt.apply_gradients([(fcgrad, self.train_last_layer[0]),
                                         (fbgrad*2, self.train_last_layer[1])], global_step=global_step)
 
     def pre_train(self, img_dataset):
