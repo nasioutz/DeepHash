@@ -196,16 +196,28 @@ class DCH(object):
         s = tf.clip_by_value(label_ip, 0.0, 1.0)
 
         s_2 = tf.multiply(tf.expand_dims(s - tf.eye(tf.shape(self.img_last_layer)[0]), 2), np.ones((1, 1, np.int(self.img_last_layer.shape[1].value))))
-        mean = tf.reduce_mean(tf.multiply(u, s_2), 1)
+
+        s_vectors = tf.multiply(u, s_2)
+
+        mean = tf.reduce_mean(s_vectors)
 
         if normed:
             per_img_avg = tfdist.normed_euclidean2(u,mean)
         else:
             per_img_avg = tfdist.euclidean(u, mean)
 
-        loss = tf.reduce_mean(per_img_avg)
+        distance = tfdist.distance(u, v, pair=True, dist_type="euclidean")
+        s_1 = s - tf.eye(tf.shape(self.img_last_layer)[0])
+        s_distances = tf.multiply(distance, s_1)
+        values, indices = tf.math.top_k(s_distances, k=10, sorted=True)
+        top_n = tf.gather(u, indices)
+        mean_dist = tf.reduce_mean(top_n,1)
 
-        return loss
+        per_img_avg2 = tfdist.euclidean(u, mean_dist)
+
+        loss = tf.reduce_mean(per_img_avg)
+        loss2 = tf.reduce_mean(per_img_avg2)
+        return loss2
 
     def regularizing_layer(self):
 
@@ -420,7 +432,6 @@ class DCH(object):
 
         self.sess.close()
 
-
     def pretrain_validation(self, img_query, img_database, R=100):
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
@@ -475,8 +486,6 @@ class DCH(object):
 
         self.sess.close()
 
-        k = 100
-
         query_output = img_query.output
         database_output = img_database.output
         query_labels = img_query.label
@@ -488,34 +497,37 @@ class DCH(object):
         d_labels = tf.placeholder(dtype=tf.float32, shape=[None, database_labels.shape[1]])
 
         distance = tfdist.distance(q_output, d_output, pair=True, dist_type="euclidean")
-        values, indices = tf.math.top_k(distance, k=k, sorted=True)
+        values, indices = tf.math.top_k(tf.negative(distance), k=self.pretrain_top_k, sorted=True)
         top_n = tf.gather(d_labels, indices)
-        labels_tf = tf.tile(tf.reshape(q_labels, [1, 1, q_labels.get_shape()[1]]), [1, k, 1])
-        eqls = tf.reduce_all(tf.equal(labels_tf, top_n), 2)
-        AP = tf.divide(tf.reduce_sum(tf.cast(eqls, tf.float32), 1), tf.cast(k, tf.float32))
+        labels_tf = tf.tile(tf.reshape(q_labels, [1, 1, q_labels.get_shape()[1]]), [1, self.pretrain_top_k, 1])
+        matches = tf.reduce_sum(tf.cast(tf.reduce_all(tf.equal(labels_tf, top_n), 2), tf.float32), 1)
+        ap = tf.divide(matches, tf.cast(self.pretrain_top_k, tf.float32))
 
         eval_sess = tf.Session(config=self.configProto)
         eval_sess.run(tf.global_variables_initializer())
 
-        mAP = np.array([0.0])
+        meanAP = 0.0
 
-        t_range = trange(query_output.shape[0], desc='Calculating Mean Average Precision for k={}'.format(k), leave=True)
+        t_range = trange(query_output.shape[0],
+                         desc='Calculating Mean Average Precision for k={}'.format(self.pretrain_top_k), leave=True)
         for i in t_range:
 
-            avPrec = eval_sess.run(AP, feed_dict={
+            avp = eval_sess.run(ap, feed_dict={
                                         q_output: query_output[i:(i+1), :],
                                         d_output: database_output,
                                         q_labels: query_labels[i:(i+1), :],
                                         d_labels: database_labels})
-            mAP += avPrec
+            meanAP += avp
 
-            d_range.set_description('Calculating Mean Average Precision for k={} | Current Average Precision: {}'
-                                    .format(k, avPrec))
-            d_range.refresh()
+            t_range.set_description('Calculating Mean Average Precision for k={} | Current Average Precision: {}'
+                                    .format(self.pretrain_top_k, avp))
+            t_range.refresh()
 
-        mAP = np.divide(mAP, query_output.shape[0])
+        meanAP = np.divide(meanAP, query_output.shape[0])
 
-        return {'mAP for k={} first'.format(k): mAP[0]}
+        eval_sess.close()
+
+        return {'mAP for k={} first'.format(self.pretrain_top_k): meanAP[0]}
 
     def validation(self, img_query, img_database, R=100):
 

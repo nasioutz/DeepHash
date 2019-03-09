@@ -32,7 +32,7 @@ class Arguments:
                        finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate=True, evaluate_all_radiuses=True,
                        reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
                        pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
-                       pretrain_evaluation=False):
+                       pretrain_evaluation=False, pretrain_top_k=100):
 
 
         self.dataset = dataset
@@ -42,6 +42,7 @@ class Arguments:
         self.pretrain = pretrain
         self.pretrn_layer = pretrn_layer
         self.pretrain_lr = pretrain_lr
+        self.pretrain_top_k = pretrain_top_k
 
         self.training = training
         self.gamma = gamma
@@ -110,7 +111,7 @@ argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
                      training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      pretrain=True, pretrain_evaluation=True, pretrn_layer='fc7', pretrain_lr=5e-5,
-                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     batch_size=256, val_batch_size=16, iter_num=2000, pretrain_top_k=100,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
                      gamma=10, q_lambda=0.0,
                      regularization_factor=0.0, regularizer='average', reg_layer='hash',
