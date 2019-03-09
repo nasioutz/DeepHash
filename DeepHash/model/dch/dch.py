@@ -45,15 +45,16 @@ class DCH(object):
         self.save_file = os.path.join(self.save_dir, self.file_name + '.npy')
 
         ### Setup session
-        configProto = tf.ConfigProto()
-        configProto.gpu_options.allow_growth = True
-        configProto.allow_soft_placement = True
-        self.sess = tf.Session(config=configProto)
+        self.configProto = tf.ConfigProto()
+        self.configProto.gpu_options.allow_growth = True
+        self.configProto.allow_soft_placement = True
+        self.sess = tf.Session(config=self.configProto)
 
         ### Create variables and placeholders
         self.img = tf.placeholder(tf.float32, [None, 256, 256, 3])
         self.img_label = tf.placeholder(tf.float32, [None, self.label_dim])
-        self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = self.load_model(self.pretrain)
+        self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = \
+            self.load_model(self.pretrain or self.pretrain_evaluation)
 
         if config.reg_layer == 'hash':
             self.regularization_layer = self.img_last_layer
@@ -66,9 +67,9 @@ class DCH(object):
 
         self.global_step = tf.Variable(0, trainable=False)
 
-        if self.pretrain:
+        if self.pretrain or self.pretrain_evaluation:
             if self.pretrn_layer == 'fc7':
-                self.train_op = self.apply_pretrain_conv5_loss_function(self.global_step)
+                self.train_op = self.apply_pretrain_fc7_loss_function(self.global_step)
             elif self.pretrn_layer == 'conv5':
                 self.train_op = self.apply_pretrain_conv5_loss_function(self.global_step)
         else:
@@ -112,7 +113,7 @@ class DCH(object):
 
         return img_output
 
-    def save_model(self, model_file=None,pretrain=False):
+    def save_model(self, model_file=None):
         if model_file is None:
             model_file = self.save_file
         model = {}
@@ -182,7 +183,9 @@ class DCH(object):
 
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
 
-    def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=True):
+
+    def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=False):
+
 
         if v is None:
             v = u
@@ -192,40 +195,7 @@ class DCH(object):
             tf.matmul(label_u, tf.transpose(label_v)), tf.float32)
         s = tf.clip_by_value(label_ip, 0.0, 1.0)
 
-        if normed:
-            ip_1 = tf.matmul(u, tf.transpose(v))
-
-            def reduce_shaper(t):
-                return tf.reshape(tf.reduce_sum(t, 1), [tf.shape(t)[0], 1])
-
-            mod_1 = tf.sqrt(tf.matmul(reduce_shaper(tf.square(u)), reduce_shaper(
-                tf.square(v)) + tf.constant(0.000001), transpose_b=True))
-            dist = tf.constant(np.float32(self.img_last_layer.shape[1].value)) / 2.0 * \
-                   (1.0 - tf.div(ip_1, mod_1) + tf.constant(0.000001))
-        else:
-
-            r_u = tf.reshape(tf.reduce_sum(u * u, 1), [-1, 1])
-            r_v = tf.reshape(tf.reduce_sum(v * v, 1), [-1, 1])
-            dist = r_u - 2 * tf.matmul(u, tf.transpose(v)) + \
-                   tf.transpose(r_v) + tf.constant(0.001)
-
-        per_img_avg = tf.reduce_mean(tf.multiply(dist, s - np.eye(self.batch_size, self.batch_size)), 1)
-
-        loss = tf.reduce_mean(per_img_avg)
-
-        return loss
-
-    def euclidian_loss_alternative(self, u, label_u, v=None, label_v=None, normed=False):
-
-        if v is None:
-            v = u
-            label_v = label_u
-
-        label_ip = tf.cast(
-            tf.matmul(label_u, tf.transpose(label_v)), tf.float32)
-        s = tf.clip_by_value(label_ip, 0.0, 1.0)
-
-        s_2 = tf.multiply(tf.expand_dims(s - np.eye(self.batch_size, self.batch_size), 2), np.ones((1, 1, np.int(self.img_last_layer.shape[1].value))))
+        s_2 = tf.multiply(tf.expand_dims(s - tf.eye(tf.shape(self.img_last_layer)[0]), 2), np.ones((1, 1, np.int(self.img_last_layer.shape[1].value))))
         mean = tf.reduce_mean(tf.multiply(u, s_2), 1)
 
         if normed:
@@ -304,7 +274,7 @@ class DCH(object):
 
     def apply_pretrain_fc7_loss_function(self, global_step):
         ### loss function
-        self.eucl_loss = self.euclidian_loss_alternative(self.img_last_layer, self.img_label, normed=False)
+        self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
         self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
 
         self.reg_loss = self.reg_loss_img * self.regularization_factor
@@ -345,7 +315,7 @@ class DCH(object):
 
     def apply_pretrain_conv5_loss_function(self, global_step):
         ### loss function
-        self.eucl_loss = self.euclidian_loss_alternative(self.img_last_layer, self.img_label, normed=False)
+        self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
         self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
 
         self.reg_loss = self.reg_loss_img * self.regularization_factor
@@ -387,7 +357,7 @@ class DCH(object):
         if os.path.exists(tflog_path):
             shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
-        t_range = trange(self.iter_num, desc="Starting Training", leave=True)
+        t_range = trange(self.iter_num, desc="Starting PreTraining", leave=True)
         for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
 
@@ -449,6 +419,103 @@ class DCH(object):
         print("model saved")
 
         self.sess.close()
+
+
+    def pretrain_validation(self, img_query, img_database, R=100):
+        if os.path.exists(self.save_dir) is False:
+            os.makedirs(self.save_dir)
+
+        query_batch = int(ceil(img_query.n_samples / float(self.val_batch_size)))
+        img_query.finish_epoch()
+
+        q_range = trange(query_batch, desc="Starting Query Set for Pretraining Evaluation", leave=True)
+        for i in q_range:
+
+            images, labels = img_query.next_batch(self.val_batch_size)
+
+            output, loss = self.sess.run(
+
+                                   [self.img_last_layer, self.eucl_loss],
+                                   feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+                                   )
+
+            img_query.feed_batch_output(self.val_batch_size, output)
+
+            q_range.set_description('Evaluating Pretraining Query | Cosine Loss: %s' % loss)
+            q_range.refresh()
+
+        if self.save_evaluation_models:
+            with open(join(self.save_dir, 'img_query.pkl'), 'wb') as output:
+                pickle.dump(img_query, output, pickle.HIGHEST_PROTOCOL)
+
+        database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
+        img_database.finish_epoch()
+
+        d_range = trange(database_batch, desc="Starting Database Evaluation", leave=True)
+
+        for i in d_range:
+
+
+            images, labels = img_database.next_batch(self.val_batch_size)
+
+            output, loss = self.sess.run(
+
+                                        [self.img_last_layer, self.eucl_loss],
+                                        feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+                                        )
+
+            img_database.feed_batch_output(self.val_batch_size, output)
+
+            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+            d_range.refresh()
+
+        if self.save_evaluation_models:
+            with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
+                pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
+
+        self.sess.close()
+
+        k = 100
+
+        query_output = img_query.output
+        database_output = img_database.output
+        query_labels = img_query.label
+        database_labels = img_database.label
+
+        q_output = tf.placeholder(dtype=tf.float32, shape=[None, query_output.shape[1]])
+        d_output = tf.placeholder(dtype=tf.float32, shape=[None, database_output.shape[1]])
+        q_labels = tf.placeholder(dtype=tf.float32, shape=[None, query_labels.shape[1]])
+        d_labels = tf.placeholder(dtype=tf.float32, shape=[None, database_labels.shape[1]])
+
+        distance = tfdist.distance(q_output, d_output, pair=True, dist_type="euclidean")
+        values, indices = tf.math.top_k(distance, k=k, sorted=True)
+        top_n = tf.gather(d_labels, indices)
+        labels_tf = tf.tile(tf.reshape(q_labels, [1, 1, q_labels.get_shape()[1]]), [1, k, 1])
+        eqls = tf.reduce_all(tf.equal(labels_tf, top_n), 2)
+        AP = tf.divide(tf.reduce_sum(tf.cast(eqls, tf.float32), 1), tf.cast(k, tf.float32))
+
+        eval_sess = tf.Session(config=self.configProto)
+        eval_sess.run(tf.global_variables_initializer())
+
+        mAP = np.array([0.0])
+
+        t_range = trange(query_output.shape[0], desc='Calculating Mean Average Precision for k={}'.format(k), leave=True)
+        for i in t_range:
+
+            avPrec = eval_sess.run(AP, feed_dict={
+                                        q_output: query_output[i:(i+1), :],
+                                        d_output: database_output,
+                                        q_labels: query_labels[i:(i+1), :],
+                                        d_labels: database_labels})
+            mAP += avPrec
+
+            d_range.set_description('Calculating Mean Average Precision for k={} | Current Average Precision: {}'
+                                    .format(k, avPrec))
+            d_range.refresh()
+
+        mAP = np.divide(mAP, query_output.shape[0])
+
+        return {'mAP for k={} first'.format(k): mAP[0]}
 
     def validation(self, img_query, img_database, R=100):
 

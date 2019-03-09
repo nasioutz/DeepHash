@@ -403,7 +403,6 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
         out = tf.nn.bias_add(conv, biases)
 
         conv5 = tf.nn.relu(out, name=scope)
-        deep_param_img['conv5_pre'] = [conv5, out]
         deep_param_img['conv5'] = [kernel, biases]
         train_layers += [kernel, biases]
 

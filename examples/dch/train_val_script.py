@@ -29,21 +29,24 @@ class Arguments:
     def __init__(self, lr=0.005, output_dim=64, alpha=0.5, bias=0.0, gamma=20, iter_num=2000, q_lambda=0.0, dataset='nuswide_81',gpus='0',
                        log_dir='tflog', batch_size=128, val_batch_size=16, decay_step=10000,decay_factor=0.1, with_tanh=True,
                        img_model='alexnet', model_weights=join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy'),
-                       finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate_only=True, evaluate_all_radiuses=True,
+                       finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate=True, evaluate_all_radiuses=True,
                        reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
-                       pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False):
+                       pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
+                       pretrain_evaluation=False):
 
 
         self.dataset = dataset
         self.output_dim = output_dim
         self.unsupervised = unsupervised
+
         self.pretrain = pretrain
         self.pretrn_layer = pretrn_layer
+        self.pretrain_lr = pretrain_lr
 
+        self.training = training
         self.gamma = gamma
         self.q_lambda = q_lambda
 
-        self.pretrain_lr = pretrain_lr
         self.lr = lr
         self.decay_factor = decay_factor
         self.decay_step = decay_step
@@ -57,8 +60,9 @@ class Arguments:
         self.val_batch_size = val_batch_size
 
         self.random_query = random_query
-        self.evaluate_only = evaluate_only
+        self.evaluate = evaluate
         self.evaluate_all_radiuses = evaluate_all_radiuses
+        self.pretrain_evaluation = pretrain_evaluation
 
         self.model_weights = model_weights
         self.finetune_all = finetune_all
@@ -104,8 +108,8 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
-                     evaluate_only=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     pretrain=True, pretrn_layer='conv5', pretrain_lr=5e-13,
+                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     pretrain=True, pretrain_evaluation=True, pretrn_layer='fc7', pretrain_lr=5e-5,
                      batch_size=256, val_batch_size=16, iter_num=2000,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
                      gamma=10, q_lambda=0.0,
@@ -141,14 +145,33 @@ for args in argument_list:
     if args.random_query:
         query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
 
-    if not args.evaluate_only:
+    if args.pretrain:
+        model.train(train_img, args)
+        args.model_weights = args.pretrain_model_weights
+
+    tf.reset_default_graph()
+
+    if args.pretrain_evaluation:
+        maps = model.validation(database_img, query_img, args)
+        for key in maps:
+            print(("{}\t{}%".format(key, maps[key]*100.0)))
+
+    args.pretrain = False
+    args.pretrain_evaluation = False
+    tf.reset_default_graph()
+
+    train_img = dataset.import_train(data_root, args.img_tr)
+    query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
+
+    if args.training:
         model_weights = model.train(train_img, database_img, query_img, args)
         args.model_weights = model_weights
 
-    maps = model.validation(database_img, query_img, args)
-    for key in maps:
-        print(("{}\t{}".format(key, maps[key])))
-        open(args.log_file, "a").write(("{}\t{}\n".format(key, maps[key])))
+    if args.evaluate:
+        maps = model.validation(database_img, query_img, args)
+        for key in maps:
+            print(("{}\t{}".format(key, maps[key])))
+            open(args.log_file, "a").write(("{}\t{}\n".format(key, maps[key])))
 
     print(vars(args))
     open(args.log_file, "a").write(json.dumps(str(vars(args)))+"\n")
