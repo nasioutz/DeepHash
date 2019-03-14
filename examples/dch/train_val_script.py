@@ -8,6 +8,7 @@ import DeepHash.data_provider.image as dataset
 from os.path import join
 from time import localtime, sleep
 import tensorflow as tf
+import numpy as np
 warnings.filterwarnings("ignore", category = DeprecationWarning)
 warnings.filterwarnings("ignore", category = FutureWarning)
 
@@ -32,7 +33,8 @@ class Arguments:
                        finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate=True, evaluate_all_radiuses=True,
                        reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
                        pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
-                       pretrain_evaluation=False, pretrain_top_k=100):
+                       pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
+                       retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000):
 
 
         self.dataset = dataset
@@ -41,8 +43,13 @@ class Arguments:
 
         self.pretrain = pretrain
         self.pretrn_layer = pretrn_layer
+        self.pretrain_iter_num = pretrain_iter_num
         self.pretrain_lr = pretrain_lr
+        self.pretrain_decay_step = pretrain_decay_step
+        self.finetune_all_pretrain = finetune_all_pretrain
         self.pretrain_top_k = pretrain_top_k
+        self.batch_targets = batch_targets
+        self.retargeting_step = retargeting_step
 
         self.training = training
         self.gamma = gamma
@@ -67,7 +74,7 @@ class Arguments:
 
         self.model_weights = model_weights
         self.finetune_all = finetune_all
-
+        self.extract_features = extract_features
 
         self.img_model = img_model
         self.alpha = alpha
@@ -99,6 +106,8 @@ class Arguments:
         else:
             self.pretrain_model_weights = None
 
+        self.file_path = file_path
+
         sleep(2)
 
 
@@ -109,9 +118,12 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
-                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     pretrain=True, pretrain_evaluation=True, pretrn_layer='fc7', pretrain_lr=5e-5,
-                     batch_size=256, val_batch_size=16, iter_num=2000, pretrain_top_k=100,
+                     pretrain=True, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-7, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
                      gamma=10, q_lambda=0.0,
                      regularization_factor=0.0, regularizer='average', reg_layer='hash',
@@ -143,11 +155,18 @@ for args in argument_list:
     train_img = dataset.import_train(data_root, args.img_tr)
     query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
+    if args.extract_features:
+        pretrain_buffer = args.pretrain
+        args.pretrain=True
+        new_features = model.feature_extraction(database_img, args)
+        np.save(join(args.file_path,"DeepHash","data_provider","extracted_targets",args.dataset,args.pretrn_layer+".npy"),new_features)
+        args.pretrain=pretrain_buffer
+
     if args.random_query:
         query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
 
     if args.pretrain:
-        model.train(train_img, args)
+        model.train(train_img, args, database_img=database_img)
         args.model_weights = args.pretrain_model_weights
 
     tf.reset_default_graph()
@@ -155,7 +174,8 @@ for args in argument_list:
     if args.pretrain_evaluation:
         maps = model.validation(database_img, query_img, args)
         for key in maps:
-            print(("{}\t{}%".format(key, maps[key]*100.0)))
+            print(("{}\t{}%".format(key, maps[key])))
+            open(args.log_file, "a").write(("{}\t{}\n".format(key, maps[key])))
 
     args.pretrain = False
     args.pretrain_evaluation = False
@@ -165,7 +185,7 @@ for args in argument_list:
     query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
     if args.training:
-        model_weights = model.train(train_img, database_img, query_img, args)
+        model_weights = model.train(train_img, args)
         args.model_weights = model_weights
 
     if args.evaluate:

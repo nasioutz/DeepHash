@@ -2,17 +2,21 @@ from .util import Dataset
 from .dch import DCH
 import tensorflow as tf
 
+
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
 
-def train(train_img, config):
 
-    model = DCH(config)
+def train(train_img, config, database_img=None):
+
     img_train = Dataset(train_img, config.output_dim)
+    model = DCH(config)
     if config.pretrain:
-        model.pre_train(img_train)
+        img_database = Dataset(database_img, layer_output_dim[config.pretrn_layer])
+        model.pre_train(img_train, img_database)
     else:
         model.train(img_train)
     return model.save_file
+
 
 def validation(database_img, query_img, config):
     model = DCH(config)
@@ -24,3 +28,13 @@ def validation(database_img, query_img, config):
         img_database = Dataset(database_img, config.output_dim)
         img_query = Dataset(query_img, config.output_dim)
         return model.validation(img_query, img_database, config.R)
+
+
+def feature_extraction(database_img, config):
+
+    model = DCH(config)
+
+    img_database = Dataset(database_img, layer_output_dim[config.pretrn_layer])
+
+    return model.feature_extraction(img_database)
+
