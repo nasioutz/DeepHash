@@ -254,6 +254,7 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
                              for each in tf.unstack(reshaped_image, batch_size)])
 
         def val_fn():
+            print(val_batch_size)
             unstacked = tf.unstack(reshaped_image, val_batch_size)
 
             def crop(img, x, y): return tf.image.crop_to_bounding_box(
@@ -277,6 +278,8 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
             return distorted
 
         distorted = tf.cond(stage > 0, val_fn, train_fn)
+
+        print(distorted)
 
         # Zero-mean input
         mean = tf.constant([103.939, 116.779, 123.68], dtype=tf.float32, shape=[
@@ -456,9 +459,9 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
     deep_param_img = {}
     train_layers = []
     train_last_layer = []
-    # print("loading img model from %s" % model_weights)
+    #print("loading img model from %s" % model_weights)
     net_data = dict(np.load(model_weights, encoding='bytes').item())
-    # print(list(net_data.keys()))
+    #print(list(net_data.keys()))
 
     # swap(2,1,0), bgr -> rgb
     reshaped_image = tf.cast(img, tf.float32)[:, :, :, ::-1]
@@ -485,7 +488,6 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
 
             def distort_fliped(x, y): return distort(
                 tf.image.flip_left_right, x, y)
-
             distorted = tf.concat([distort_fliped(0, 0), distort_fliped(28, 0),
                                    distort_fliped(
                                        0, 28), distort_fliped(28, 28),
@@ -494,12 +496,11 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
                                    distort_raw(28, 28), distort_raw(14, 14)], 0)
 
             return distorted
-
         distorted = tf.cond(stage > 0, val_fn, train_fn)
 
         # Zero-mean input
         mean = tf.constant([103.939, 116.779, 123.68], dtype=tf.float32, shape=[
-            1, 1, 1, 3], name='img-mean')
+                           1, 1, 1, 3], name='img-mean')
         distorted = distorted - mean
 
     # Conv1
@@ -539,7 +540,6 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
 
         def convolve(i, k): return tf.nn.conv2d(
             i, k, [1, 1, 1, 1], padding='SAME')
-
         input_groups = tf.split(lrn1, group, 3)
         kernel_groups = tf.split(kernel, group, 3)
         output_groups = [convolve(i, k)
@@ -590,7 +590,6 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
 
         def convolve(i, k): return tf.nn.conv2d(
             i, k, [1, 1, 1, 1], padding='SAME')
-
         input_groups = tf.split(conv3, group, 3)
         kernel_groups = tf.split(kernel, group, 3)
         output_groups = [convolve(i, k)
@@ -611,7 +610,6 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
 
         def convolve(i, k): return tf.nn.conv2d(
             i, k, [1, 1, 1, 1], padding='SAME')
-
         input_groups = tf.split(conv4, group, 3)
         kernel_groups = tf.split(kernel, group, 3)
         output_groups = [convolve(i, k)
@@ -620,31 +618,21 @@ def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_
         conv = tf.concat(output_groups, 3)
         biases = tf.Variable(net_data['conv5'][1], name='biases')
         out = tf.nn.bias_add(conv, biases)
-        conv5 = tf.nn.relu(out, name=scope)
+
+        def val_fn1():
+
+            concated = tf.concat([tf.expand_dims(i, 0)
+                                  for i in tf.split(out, 10, 0)], 0)
+            return tf.reduce_mean(concated, 0)
+
+        conv5 = tf.cond(stage > 0, val_fn1, lambda: out)
+
+        conv5 = tf.nn.relu(conv5, name=scope)
         conv5 = tf.reduce_max(tf.reshape(conv5, [tf.shape(conv5)[0], conv5.get_shape()[1]*conv5.get_shape()[2], conv5.get_shape()[3]]), 1)
         deep_param_img['conv5'] = [kernel, biases]
         train_last_layer += [kernel, biases]
 
 
-    ''' Pool5
-    pool5 = tf.nn.max_pool(conv5,
-                           ksize=[1, 3, 3, 1],
-                           strides=[1, 2, 2, 1],
-                           padding='VALID',
-                           name='pool5')
-    '''
-
-    with tf.name_scope('fc6'):
-        fc6w = tf.Variable(net_data['fc6'][0], name='weights')
-        fc6b = tf.Variable(net_data['fc6'][1], name='biases')
-        deep_param_img['fc6'] = [fc6w, fc6b]
-
-    # FC7
-    # Output 4096
-    with tf.name_scope('fc7'):
-        fc7w = tf.Variable(net_data['fc7'][0], name='weights')
-        fc7b = tf.Variable(net_data['fc7'][1], name='biases')
-        deep_param_img['fc7'] = [fc7w, fc7b]
 
     # print("img model loading finished")
     # Return outputs

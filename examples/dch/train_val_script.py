@@ -116,12 +116,13 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 argument_list = []
 
 
+
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
                      pretrain=True, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
-                     pretrain_lr=5e-7, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     pretrn_layer='conv5', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      batch_size=256, val_batch_size=16, iter_num=2000,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
@@ -130,6 +131,7 @@ argument_list.append(Arguments(
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_2_21_13_36_6", 'models', 'model_weights_pretrain.npy')
                      ))
+
 
 
 #args = parser.parse_args()
