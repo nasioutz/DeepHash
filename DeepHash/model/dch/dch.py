@@ -199,9 +199,9 @@ class DCH(object):
             targets = tf.Variable(tf.zeros([0, u.shape[1]]))
 
             for i in range(0, shape1):
-                targets = tf.concat([tf.reshape(tf.reduce_mean(
+                targets = tf.concat([targets, tf.reshape(tf.reduce_mean(
                     tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
-                               [-1, u.shape[1]]), 0), [1, -1]), targets], 0)
+                               [-1, u.shape[1]]), 0), [1, -1])], 0)
 
             mean = tf.divide(
                 tf.reduce_sum(
