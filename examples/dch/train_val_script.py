@@ -116,21 +116,21 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 argument_list = []
 
 
-
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
-                     pretrain=True, pretrain_evaluation=False, extract_features=False,
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=True, pretrain_evaluation=True, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='conv5', batch_targets=False, pretrain_iter_num=2000,
-                     pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-8, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      batch_size=256, val_batch_size=16, iter_num=2000,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
-                     gamma=10, q_lambda=0.0,
-                     regularization_factor=0.0, regularizer='average', reg_layer='hash',
+                     gamma=10, q_lambda=0.01,
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     #model_weights=join("2019_2_21_13_36_6", 'models', 'model_weights_pretrain.npy')
+                     #model_weights=join("2019_3_20_13_26_3", 'models', 'model_weights_pretrain.npy')
                      ))
+
 
 
 
@@ -157,15 +157,24 @@ for args in argument_list:
     train_img = dataset.import_train(data_root, args.img_tr)
     query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
+    if args.random_query:
+        query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
+
+
     if args.extract_features:
+        batch_toggle = False
+        if not args.batch_targets:
+            args.batch_targets = True
+            batch_toggle = True
         pretrain_buffer = args.pretrain
         args.pretrain=True
         new_features = model.feature_extraction(database_img, args)
         np.save(join(args.file_path,"DeepHash","data_provider","extracted_targets",args.dataset,args.pretrn_layer+".npy"),new_features)
         args.pretrain=pretrain_buffer
+        if batch_toggle:
+            args.batch_targets = False
 
-    if args.random_query:
-        query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
+    tf.reset_default_graph()
 
     if args.pretrain:
         model.train(train_img, args, database_img=database_img)
