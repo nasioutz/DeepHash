@@ -65,9 +65,11 @@ class DCH(object):
         if self.pretrain or self.pretrain_evaluation or self.extract_features:
 
             if not self.extract_features:
-
                 self.targets = np.load(
                 join(self.file_path, "DeepHash", "data_provider", "extracted_targets", self.dataset, self.pretrn_layer + ".npy"))
+
+            self.batch_target_op = self.batch_target_calculation()
+
 
             if self.pretrn_layer == 'fc7':
                 self.train_op = self.apply_pretrain_fc7_loss_function(self.global_step)
@@ -208,7 +210,7 @@ class DCH(object):
 
     def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=False):
 
-        if False or self.extract_features:
+        if self.extract_features:
 
             shape1 = label_u.shape[1].value
 
@@ -223,6 +225,7 @@ class DCH(object):
             #corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
 
             targets = tf.stop_gradient(corrected_targets)
+
         else:
             targets = self.targets
 
@@ -399,16 +402,14 @@ class DCH(object):
             if not self.batch_targets and\
                (train_iter+1) % self.retargeting_step == 0 and\
                not (train_iter+1) == train_iter :
-                temp_targets = self.targets
                 self.targets = self.feature_extraction(img_database, retargeting=True)
 
 
             images, labels = img_dataset.next_batch(self.batch_size)
 
             if self.batch_targets:
-                targets = self.batch_target_calculation()
-                self.targets, output = self.sess.run(
-                        [targets, self.img_last_layer],
+                self.targets = self.sess.run(
+                        self.batch_target_op,
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 

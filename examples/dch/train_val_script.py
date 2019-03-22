@@ -117,8 +117,8 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
-                     pretrain=True, pretrain_evaluation=True, extract_features=True,
+                     dataset='nuswide_81', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=True, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
                      pretrain_lr=5e-8, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
@@ -128,7 +128,7 @@ argument_list.append(Arguments(
                      gamma=35, q_lambda=0.01,
                      regularization_factor=0.00, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     #model_weights=join("2019_3_20_13_26_3", 'models', 'model_weights_pretrain.npy')
+                     model_weights=join("2019_3_22_20_30_17", 'models', 'model_weights_pretrain.npy')
                      ))
 
 
@@ -160,7 +160,6 @@ for args in argument_list:
     if args.random_query:
         query_img.lines = random.sample(exclude_from_list(database_img.lines, train_img.lines), len(query_img.lines))
 
-
     if args.extract_features:
         batch_toggle = False
         if not args.batch_targets:
@@ -173,6 +172,7 @@ for args in argument_list:
         args.pretrain=pretrain_buffer
         if batch_toggle:
             args.batch_targets = False
+        args.extract_features = False
 
     tf.reset_default_graph()
 
