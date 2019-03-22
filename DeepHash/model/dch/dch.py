@@ -185,61 +185,59 @@ class DCH(object):
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
 
 
+    def batch_target_calculation(self):
+
+        u = self.img_last_layer
+        label_u = self.img_label
+
+        shape1 = label_u.shape[1].value
+
+        targets = tf.constant(0.0, shape=[0, u.shape[1]])
+
+        for i in range(0, shape1):
+            targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
+                tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
+                           [-1, u.shape[1]]), 0), [1, -1]))], 0)
+
+        corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
+        # corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
+
+        #corrected_targets = tf.stop_gradient(corrected_targets)
+
+        return corrected_targets
+
     def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=False):
 
-
-        if v is None:
-            v = u
-            label_v = label_u
-
-        if self.batch_targets:
+        if False:
 
             shape1 = label_u.shape[1].value
 
             targets = tf.constant(0.0, shape=[0, u.shape[1]])
 
             for i in range(0, shape1):
-                targets = tf.concat([targets, tf.reshape(tf.reduce_mean(
+                targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
                     tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
-                               [-1, u.shape[1]]), 0), [1, -1])], 0)
+                               [-1, u.shape[1]]), 0), [1, -1]))], 0)
 
-            #corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
-            corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
+            corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
+            #corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
 
-            mean = tf.divide(
-                tf.reduce_sum(
-                    tf.multiply(
-                        tf.cast(
-                            tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))),
-                            dtype=tf.float32),
-                        corrected_targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
+            self.targets = tf.stop_gradient(corrected_targets)
 
-
-        else:
-
-            mean = tf.divide(
-                tf.reduce_sum(
-                    tf.multiply(
-                        tf.cast(
-                            tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))), dtype=tf.float32),
-                        self.targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
-
-        mean = tf.stop_gradient(mean)
+        mean = tf.divide(
+            tf.reduce_sum(
+                tf.multiply(
+                    tf.cast(
+                        tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))), dtype=tf.float32),
+                    self.targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
 
         if normed:
             per_img_avg = tfdist.normed_euclidean2(u, mean)
         else:
-            pass
-            #per_img_avg = tfdist.euclidean(u, mean)
-            #per_img_avg = tf.norm(u - mean, ord='euclidean', axis=1)
+            per_img_avg = tfdist.euclidean(u, mean)
 
 
-
-
-        #per_img_avg = tf.stop_gradient(per_img_avg)
-
-        #loss = tf.reduce_mean(per_img_avg)
-        loss = tf.losses.mean_pairwise_squared_error(u, mean)
+        loss = tf.reduce_mean(per_img_avg)
         return loss
 
     def regularizing_layer(self):
@@ -396,11 +394,21 @@ class DCH(object):
         t_range = trange(self.pretrain_iter_num, desc="Starting PreTraining", leave=True)
         for train_iter in t_range:
 
-            if (train_iter+1) % self.retargeting_step == 0 and not (train_iter+1) == train_iter :
+            if not self.batch_targets and\
+               (train_iter+1) % self.retargeting_step == 0 and\
+               not (train_iter+1) == train_iter :
                 temp_targets = self.targets
                 self.targets = self.feature_extraction(img_database, retargeting=True)
 
+
             images, labels = img_dataset.next_batch(self.batch_size)
+
+            if self.batch_targets:
+                targets = self.batch_target_calculation()
+                self.targets = self.sess.run(
+                        targets,
+                        feed_dict={self.img: images, self.img_label: labels}
+                )
 
             _, loss, eucl_loss, reg_loss, output, reg_output, summary = self.sess.run(
 

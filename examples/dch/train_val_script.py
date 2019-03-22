@@ -125,7 +125,7 @@ argument_list.append(Arguments(
                      training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      batch_size=256, val_batch_size=16, iter_num=2000,
                      lr=0.001, decay_step=2000, decay_factor=0.9,
-                     gamma=10, q_lambda=0.01,
+                     gamma=35, q_lambda=0.01,
                      regularization_factor=0.00, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_20_13_26_3", 'models', 'model_weights_pretrain.npy')

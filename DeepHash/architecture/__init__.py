@@ -254,7 +254,6 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
                              for each in tf.unstack(reshaped_image, batch_size)])
 
         def val_fn():
-            print(val_batch_size)
             unstacked = tf.unstack(reshaped_image, val_batch_size)
 
             def crop(img, x, y): return tf.image.crop_to_bounding_box(
@@ -278,8 +277,6 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
             return distorted
 
         distorted = tf.cond(stage > 0, val_fn, train_fn)
-
-        print(distorted)
 
         # Zero-mean input
         mean = tf.constant([103.939, 116.779, 123.68], dtype=tf.float32, shape=[
