@@ -208,7 +208,7 @@ class DCH(object):
 
     def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=False):
 
-        if False:
+        if False or self.extract_features:
 
             shape1 = label_u.shape[1].value
 
@@ -222,14 +222,16 @@ class DCH(object):
             corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
             #corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
 
-            self.targets = tf.stop_gradient(corrected_targets)
+            targets = tf.stop_gradient(corrected_targets)
+        else:
+            targets = self.targets
 
         mean = tf.divide(
             tf.reduce_sum(
                 tf.multiply(
                     tf.cast(
                         tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))), dtype=tf.float32),
-                    self.targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
+                    targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
 
         if normed:
             per_img_avg = tfdist.normed_euclidean2(u, mean)
@@ -405,8 +407,8 @@ class DCH(object):
 
             if self.batch_targets:
                 targets = self.batch_target_calculation()
-                self.targets = self.sess.run(
-                        targets,
+                self.targets, output = self.sess.run(
+                        [targets, self.img_last_layer],
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 

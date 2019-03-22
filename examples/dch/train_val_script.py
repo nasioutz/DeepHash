@@ -118,7 +118,7 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
-                     pretrain=True, pretrain_evaluation=True, extract_features=False,
+                     pretrain=True, pretrain_evaluation=True, extract_features=True,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
                      pretrain_lr=5e-8, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
