@@ -70,13 +70,7 @@ class DCH(object):
 
             self.batch_target_op = self.batch_target_calculation()
 
-
-            if self.pretrn_layer == 'fc7':
-                self.train_op = self.apply_pretrain_fc7_loss_function(self.global_step)
-            elif self.pretrn_layer == 'conv5':
-                self.train_op = self.apply_pretrain_conv5_loss_function(self.global_step)
-        else:
-            self.train_op = self.apply_loss_function(self.global_step)
+        self.train_op = self.apply_loss_function(self.global_step)
 
         self.sess.run(tf.global_variables_initializer())
         return
@@ -84,33 +78,28 @@ class DCH(object):
     def load_model(self,pretrain=False):
         if self.img_model == 'alexnet':
             if pretrain:
-                if self.pretrn_layer == 'fc7':
-                    img_output = img_alexnet_layers_pretrain_fc7(
-                        self.img,
-                        self.batch_size,
-                        self.output_dim,
-                        self.stage,
-                        self.model_weights,
-                        self.with_tanh,
-                        self.val_batch_size)
-                elif self.pretrn_layer == 'conv5':
-                    img_output = img_alexnet_layers_pretrain_conv5(
-                        self.img,
-                        self.batch_size,
-                        self.output_dim,
-                        self.stage,
-                        self.model_weights,
-                        self.with_tanh,
-                        self.val_batch_size)
+                img_output = img_alexnet_layers_custom(
+                    self.img,
+                    self.batch_size,
+                    self.output_dim,
+                    self.stage,
+                    self.model_weights,
+                    self.backup_model_weights,
+                    self.with_tanh,
+                    self.val_batch_size,
+                    self.pretrn_layer,
+                    hash=False)
             else:
-                img_output = img_alexnet_layers(
-                        self.img,
-                        self.batch_size,
-                        self.output_dim,
-                        self.stage,
-                        self.model_weights,
-                        self.with_tanh,
-                        self.val_batch_size)
+                img_output = img_alexnet_layers_custom(
+                    self.img,
+                    self.batch_size,
+                    self.output_dim,
+                    self.stage,
+                    self.model_weights,
+                    self.backup_model_weights,
+                    self.with_tanh,
+                    self.val_batch_size,
+                    self.hash_layer)
         else:
             raise Exception('cannot use such CNN model as ' + self.img_model)
 
@@ -266,49 +255,61 @@ class DCH(object):
             return 0.0
 
     def apply_loss_function(self, global_step):
-        ### loss function
-        self.cos_loss = self.cauchy_cross_entropy(self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
-        self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
+        # loss function
+        if self.pretrain or self.pretrain_evaluation or self.extract_features:
+            self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
 
-        self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
-        self.q_loss = self.q_lambda * self.q_loss_img
-        self.reg_loss = self.reg_loss_img * self.regularization_factor
-        self.loss = self.cos_loss + self.q_loss + self.reg_loss
+            self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
+            self.reg_loss = self.reg_loss_img * self.regularization_factor
 
-        ### Last layer has a 10 times learning rate
-        lr = tf.train.exponential_decay(self.lr, global_step, self.decay_step, self.lr, staircase=True)
+            self.loss = self.eucl_loss + self.reg_loss
+
+            learning_rate = self.pretrain_lr
+            decay_step = self.pretrain_decay_step
+
+            tf.summary.scalar('euclidan_loss', self.eucl_loss)
+        else:
+            self.cos_loss = self.cauchy_cross_entropy(self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
+            self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
+            self.q_loss = self.q_lambda * self.q_loss_img
+
+            self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
+            self.reg_loss = self.reg_loss_img * self.regularization_factor
+
+            self.loss = self.cos_loss + self.q_loss + self.reg_loss
+
+            learning_rate = self.lr
+            decay_step = self.decay_step
+
+            tf.summary.scalar('cauchy_loss', self.cos_loss)
+            tf.summary.scalar('quantization_loss', self.q_loss)
+
+
+        # Last layer has a 10 times learning rate
+        lr = tf.train.exponential_decay(learning_rate, global_step, decay_step, learning_rate, staircase=True)
         opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9)
         grads_and_vars = opt.compute_gradients(self.loss, self.train_layers+self.train_last_layer)
         fcgrad, _ = grads_and_vars[-2]
         fbgrad, _ = grads_and_vars[-1]
 
         self.grads_and_vars = grads_and_vars
+
+        tf.summary.scalar('regularization_loss', self.reg_loss)
         tf.summary.scalar('loss', self.loss)
-        tf.summary.scalar('cos_loss', self.cos_loss)
-        tf.summary.scalar('q_loss', self.q_loss)
         tf.summary.scalar('lr', lr)
         self.merged = tf.summary.merge_all()
 
         if self.finetune_all:
-            return opt.apply_gradients([(grads_and_vars[0][0], self.train_layers[0]),
-                                        (grads_and_vars[1][0]*2, self.train_layers[1]),
-                                        (grads_and_vars[2][0], self.train_layers[2]),
-                                        (grads_and_vars[3][0]*2, self.train_layers[3]),
-                                        (grads_and_vars[4][0], self.train_layers[4]),
-                                        (grads_and_vars[5][0]*2, self.train_layers[5]),
-                                        (grads_and_vars[6][0], self.train_layers[6]),
-                                        (grads_and_vars[7][0]*2, self.train_layers[7]),
-                                        (grads_and_vars[8][0], self.train_layers[8]),
-                                        (grads_and_vars[9][0]*2, self.train_layers[9]),
-                                        (grads_and_vars[10][0], self.train_layers[10]),
-                                        (grads_and_vars[11][0]*2, self.train_layers[11]),
-                                        (grads_and_vars[12][0], self.train_layers[12]),
-                                        (grads_and_vars[13][0]*2, self.train_layers[13]),
-                                        (fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
+            grad_list = [(grad_and_var[0]*(2**(grads_and_vars.index(grad_and_var) % 2)),
+                           self.train_layers[grads_and_vars.index(grad_and_var)])
+                           for grad_and_var in grads_and_vars[:-2]]
         else:
-            return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
+            grad_list = []
+
+        grad_list = grad_list + [(fcgrad * 10, self.train_last_layer[0]),
+                                 (fbgrad * 20, self.train_last_layer[1])]
+
+        return opt.apply_gradients(grad_list, global_step=global_step)
 
     def apply_pretrain_fc7_loss_function(self, global_step):
         ### loss function
@@ -457,7 +458,8 @@ class DCH(object):
 
             img_dataset.feed_batch_output(self.batch_size, output)
 
-            q_loss = loss - cos_loss
+            #q_loss = loss - cos_loss
+            q_loss = 0.0
             t_range.set_description(
                                   "Training Model | Loss = {:2f}, Cross_Entropy Loss = {:2f}, Quantization_Loss = {:2f}, Regularization Loss = {:2f}"
                                   .format(loss, cos_loss, q_loss, reg_loss))
@@ -661,27 +663,32 @@ class DCH(object):
 
         if self.evaluate_all_radiuses:
 
-            # prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
-
-            m_range = trange(self.output_dim+1, desc="Description Placeholder", leave=True)
+            m_range = trange(self.output_dim+1, desc="Calculating mAP @H<=", leave=True)
+            #prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
             for i in m_range:
-                prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
-                plot.plot('prec', prec[i])
-                plot.plot('rec', rec[i])
-                plot.plot('mAP', mmap[i])
+                prec_i, rec_i, mmap_i = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
+                plot.plot('prec', prec_i)
+                plot.plot('rec', rec_i)
+                plot.plot('mAP', mmap_i)
                 plot.tick()
-                d_range.set_description(
-                    'Results ham dist [{}], prec:{}, rec:%{}, mAP:%{}'.format(i, prec[i], rec[i], mmap[i]))
-                d_range.refresh()
+
                 open(self.log_file, "a").writelines(
-                    'Results ham dist [{}], prec:{}, rec:%{}, mAP:%{}'.format(i, prec[i], rec[i], mmap[i]))
+                    'Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}\n'.format(i, prec_i, rec_i, mmap_i))
+                m_range.set_description(
+                    desc='Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}'.format(i, prec_i, rec_i, mmap_i))
+                m_range.refresh()
+
+                if i == 2:
+                    prec, rec, mmap = prec_i, rec_i, mmap_i
 
             result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
             if os.path.exists(result_save_dir) is False:
                 os.makedirs(result_save_dir)
             plot.flush(result_save_dir)
 
-        prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
+        else:
+            prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
+
         return {
             'i2i_by_feature': mAPs.get_mAPs_by_feature(img_database, img_query),
             'i2i_after_sign': mAPs.get_mAPs_after_sign(img_database, img_query),

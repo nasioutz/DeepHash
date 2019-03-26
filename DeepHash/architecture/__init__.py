@@ -216,6 +216,7 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
             fc8b = tf.Variable(tf.constant(0.0, shape=[output_dim],
                                            dtype=tf.float32), name='biases')
         fc8l = tf.nn.bias_add(tf.matmul(fc7, fc8w), fc8b)
+
         if with_tanh:
             fc8_t = tf.nn.tanh(fc8l)
         else:
@@ -233,12 +234,14 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
     # Return outputs
     return fc8, deep_param_img, train_layers, train_last_layer
 
-def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_weights, with_tanh=True, val_batch_size=32):
+
+def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights, backup_model_weights, with_tanh=True, val_batch_size=32, final_layer='fc8', hash=True,):
     deep_param_img = {}
     train_layers = []
     train_last_layer = []
     # print("loading img model from %s" % model_weights)
     net_data = dict(np.load(model_weights, encoding='bytes').item())
+    backup_net_data = dict(np.load(backup_model_weights, encoding='bytes').item())
     # print(list(net_data.keys()))
 
     # swap(2,1,0), bgr -> rgb
@@ -402,9 +405,30 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
         biases = tf.Variable(net_data['conv5'][1], name='biases')
         out = tf.nn.bias_add(conv, biases)
 
-        conv5 = tf.nn.relu(out, name=scope)
+        if final_layer == 'conv5':
+            if hash and with_tanh:
+                out_t = tf.nn.tanh(out)
+            else:
+                out_t = out
+
+            def val_fn1():
+                concated = tf.concat([tf.expand_dims(i, 0)
+                                      for i in tf.split(out_t, 10, 0)], 0)
+                return tf.reduce_mean(concated, 0)
+
+            conv5 = tf.cond(stage > 0, val_fn1, lambda: out_t)
+        else:
+            conv5 = out
+
+        conv5 = tf.nn.relu(conv5, name=scope)
+
         deep_param_img['conv5'] = [kernel, biases]
-        train_layers += [kernel, biases]
+
+        if final_layer == 'conv5':
+            train_last_layer += [kernel, biases]
+            last_layer_output = tf.reduce_max(tf.reshape(conv5, [tf.shape(conv5)[0], conv5.get_shape()[1]*conv5.get_shape()[2], conv5.get_shape()[3]]), 1)
+        else:
+            train_layers += [kernel, biases]
 
     # Pool5
     pool5 = tf.nn.max_pool(conv5,
@@ -417,40 +441,102 @@ def img_alexnet_layers_pretrain_fc7(img, batch_size, output_dim, stage, model_we
     # Output 4096
     with tf.name_scope('fc6'):
         shape = int(np.prod(pool5.get_shape()[1:]))
-        fc6w = tf.Variable(net_data['fc6'][0], name='weights')
-        fc6b = tf.Variable(net_data['fc6'][1], name='biases')
+
+        if 'fc6' in net_data:
+            fc6w = tf.Variable(net_data['fc6'][0], name='weights')
+            fc6b = tf.Variable(net_data['fc6'][1], name='biases')
+        else:
+            fc6w = tf.Variable(backup_net_data['fc6'][0], name='weights')
+            fc6b = tf.Variable(backup_net_data['fc6'][1], name='biases')
+
         pool5_flat = tf.reshape(pool5, [-1, shape])
         fc6l = tf.nn.bias_add(tf.matmul(pool5_flat, fc6w), fc6b)
         fc6 = tf.nn.relu(fc6l)
         fc6 = tf.cond(stage > 0, lambda: fc6, lambda: tf.nn.dropout(fc6, 0.5))
         fc6o = tf.nn.relu(fc6l)
-        deep_param_img['fc6'] = [fc6w, fc6b]
-        train_layers += [fc6w, fc6b]
+
+        if final_layer == 'fc8' or final_layer == 'fc7':
+            deep_param_img['fc6'] = [fc6w, fc6b]
+            train_layers += [fc6w, fc6b]
+        else:
+            pass
 
     # FC7
     # Output 4096
     with tf.name_scope('fc7'):
-        fc7w = tf.Variable(net_data['fc7'][0], name='weights')
-        fc7b = tf.Variable(net_data['fc7'][1], name='biases')
+        if 'fc7' in net_data:
+            fc7w = tf.Variable(net_data['fc7'][0], name='weights')
+            fc7b = tf.Variable(net_data['fc7'][1], name='biases')
+        else:
+            fc7w = tf.Variable(backup_net_data['fc7'][0], name='weights')
+            fc7b = tf.Variable(backup_net_data['fc7'][1], name='biases')
+
         fc7l = tf.nn.bias_add(tf.matmul(fc6, fc7w), fc7b)
 
-        #fc7 = tf.nn.relu(fc7l)
-        #fc7 = tf.cond(stage > 0, lambda: fc7, lambda: tf.nn.dropout(fc7, 0.5))
+        if final_layer == 'fc7':
+            if hash and with_tanh:
+                fc71_t = tf.nn.tanh(fc7l)
+            else:
+                fc71_t = fc7l
+
+            def val_fn1():
+                concated = tf.concat([tf.expand_dims(i, 0)
+                                      for i in tf.split(fc71_t, 10, 0)], 0)
+                return tf.reduce_mean(concated, 0)
+
+            fc7 = tf.cond(stage > 0, val_fn1, lambda: fc71_t)
+        else:
+            fc7n = tf.nn.relu(fc7l)
+            fc7 = tf.cond(stage > 0, lambda: fc7n, lambda: tf.nn.dropout(tf.nn.relu(fc7n), 0.5))
+
+        if final_layer == 'fc8':
+            deep_param_img['fc6'] = [fc6w, fc6b]
+            train_layers += [fc6w, fc6b]
+        elif final_layer == 'fc7':
+            deep_param_img['fc7'] = [fc7w, fc7b]
+            train_last_layer += [fc7w, fc7b]
+            last_layer_output = fc7
+        else:
+            pass
+
+    # FC8
+    # Output output_dim
+    with tf.name_scope('fc8'):
+        # Differ train and val stage by 'fc8' as key
+        if 'fc8' in net_data:
+            fc8w = tf.Variable(net_data['fc8'][0], name='weights')
+            fc8b = tf.Variable(net_data['fc8'][1], name='biases')
+        else:
+            fc8w = tf.Variable(tf.random_normal([4096, output_dim],
+                                                dtype=tf.float32,
+                                                stddev=1e-2), name='weights')
+            fc8b = tf.Variable(tf.constant(0.0, shape=[output_dim],
+                                           dtype=tf.float32), name='biases')
+        fc8l = tf.nn.bias_add(tf.matmul(fc7, fc8w), fc8b)
+
+        if with_tanh:
+            fc8_t = tf.nn.tanh(fc8l)
+        else:
+            fc8_t = fc8l
 
         def val_fn1():
-
             concated = tf.concat([tf.expand_dims(i, 0)
-                                  for i in tf.split(fc7l, 10, 0)], 0)
+                                  for i in tf.split(fc8_t, 10, 0)], 0)
             return tf.reduce_mean(concated, 0)
 
-        fc7 = tf.cond(stage > 0, val_fn1, lambda: fc7l)
+        fc8 = tf.cond(stage > 0, val_fn1, lambda: fc8_t)
 
-        deep_param_img['fc7'] = [fc7w, fc7b]
-        train_last_layer += [fc7w, fc7b]
+        if final_layer == 'fc8':
+            deep_param_img['fc8'] = [fc8w, fc8b]
+            train_last_layer += [fc8w, fc8b]
+            last_layer_output = fc8
+        else:
+            pass
 
     # print("img model loading finished")
     # Return outputs
-    return fc7, deep_param_img, train_layers, train_last_layer
+    return last_layer_output, deep_param_img, train_layers, train_last_layer
+
 
 def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_weights, with_tanh=True, val_batch_size=32):
     deep_param_img = {}

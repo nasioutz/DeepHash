@@ -104,8 +104,7 @@ class MAPs:
         query_labels = query.label
         database_labels = database.label
 
-        t_range = trange(ips.shape[0], desc="Calculating mAP @H<=" + str(radius), leave=True)
-        for i in t_range:
+        for i in range(ips.shape[0]):
             label = query_labels[i, :]
             label[label == 0] = -1
             idx = np.reshape(np.argwhere(ips[i, :] <= radius), (-1))
@@ -159,8 +158,7 @@ class MAPs:
         database_labels = database.label
 
         ids = np.argsort(ips, 1)
-
-        for i in tqdm(range(ips.shape[0])):
+        for i in range(ips.shape[0]):
             label = query_labels[i, :]
             label[label == 0] = -1
 
@@ -170,7 +168,7 @@ class MAPs:
 
             counts = np.bincount(ips[i, :].astype(np.int64))
 
-            for r in tqdm(range(bit_n + 1)):
+            for r in range(bit_n + 1):
                 if r >= len(counts):
                     precX[i, r] = precX[i, r - 1]
                     recX[i, r] = recX[i, r - 1]
@@ -189,6 +187,8 @@ class MAPs:
                     Px = Lx.astype(float) / np.arange(1, all_num + 1, 1)
                     if rel != 0:
                         mAPX[i, r] = np.sum(Px * imatch[0:all_num]) / rel
+
+
         return np.mean(np.array(precX), 0), np.mean(np.array(recX), 0), np.mean(np.array(mAPX), 0)
 
 

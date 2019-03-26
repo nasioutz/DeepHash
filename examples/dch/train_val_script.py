@@ -34,11 +34,25 @@ class Arguments:
                        reg_layer='hash', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
                        pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
                        pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
-                       retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000):
+                       retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
+                       hash_layer='fc8'):
 
 
         self.dataset = dataset
-        self.output_dim = output_dim
+        if hash_layer == 'fc8':
+            self.output_dim = output_dim
+        elif hash_layer == 'fc7':
+            if output_dim == 4096:
+                self.output_dim = output_dim
+            else:
+                self.output_dim = 4096
+                print("WARNING: Wrong output dimension for fc7 output. Overwriting user input to 4096")
+        elif hash_layer == 'conv5':
+            if output_dim == 256:
+                self.output_dim = output_dim
+            else:
+                self.output_dim = 256
+                print("WARNING: Wrong output dimension for conv5 output. Overwriting user input to 256")
         self.unsupervised = unsupervised
 
         self.pretrain = pretrain
@@ -54,6 +68,7 @@ class Arguments:
         self.training = training
         self.gamma = gamma
         self.q_lambda = q_lambda
+        self.hash_layer = hash_layer
 
         self.lr = lr
         self.decay_factor = decay_factor
@@ -106,6 +121,8 @@ class Arguments:
         else:
             self.pretrain_model_weights = None
 
+        self.backup_model_weights = join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy')
+
         self.file_path = file_path
 
         sleep(2)
@@ -115,22 +132,89 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 argument_list = []
 
-
 argument_list.append(Arguments(
-                     dataset='nuswide_81', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
-                     pretrain=False, pretrain_evaluation=True, extract_features=False,
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-8, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
                      batch_size=256, val_batch_size=16, iter_num=2000,
-                     lr=0.001, decay_step=2000, decay_factor=0.9,
-                     gamma=35, q_lambda=0.01,
+                     lr=0.01, decay_step=1000, decay_factor=0.5,
+                     gamma=10, q_lambda=0.0, hash_layer='conv5',
                      regularization_factor=0.00, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     model_weights=join("2019_3_22_20_30_17", 'models', 'model_weights_pretrain.npy')
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
                      ))
-
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.001, decay_step=1000, decay_factor=0.5,
+                     gamma=10, q_lambda=0.0, hash_layer='conv5',
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.0001, decay_step=1000, decay_factor=0.5,
+                     gamma=10, q_lambda=0.0, hash_layer='conv5',
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
+                     ))argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.01, decay_step=1000, decay_factor=0.5,
+                     gamma=20, q_lambda=0.0, hash_layer='conv5',
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.001, decay_step=1000, decay_factor=0.5,
+                     gamma=20, q_lambda=0.0, hash_layer='conv5',
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=16, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=True, finetune_all=True, evaluate_all_radiuses=True, random_query=False,
+                     batch_size=256, val_batch_size=16, iter_num=2000,
+                     lr=0.0001, decay_step=1000, decay_factor=0.5,
+                     gamma=20, q_lambda=0.0, hash_layer='conv5',
+                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_26_14_0_10", 'models', 'model_weights.npy')
+                     ))
 
 
 
