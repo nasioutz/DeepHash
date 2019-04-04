@@ -663,7 +663,7 @@ class DCH(object):
 
         if self.evaluate_all_radiuses:
 
-            m_range = trange(self.output_dim+1, desc="Calculating mAP @H<=", leave=True)
+            m_range = trange(self.hamming_range, desc="Calculating mAP @H<=", leave=True)
             #prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
             for i in m_range:
                 prec_i, rec_i, mmap_i = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
