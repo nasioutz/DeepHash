@@ -35,7 +35,7 @@ class Arguments:
                        pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
                        pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
                        retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
-                       hash_layer='fc8', hamming_range=None):
+                       hash_layer='fc8', hamming_range=None, intermediate_iteration_evaluations=None):
 
 
         self.dataset = dataset
@@ -82,6 +82,7 @@ class Arguments:
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
 
+        self.intermediate_iteration_evaluations = intermediate_iteration_evaluations
         self.random_query = random_query
         self.evaluate = evaluate
         self.evaluate_all_radiuses = evaluate_all_radiuses
@@ -138,61 +139,22 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='coco', output_dim=16, unsupervised=False, with_tanh=True, gpus='1',
-                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
+                     pretrain=True, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
-                     lr=0.001, decay_step=1000, decay_factor=0.5,
-                     gamma=10, q_lambda=0.1, hash_layer='fc8',
-                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
-                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
-                     ))
-argument_list.append(Arguments(
-                     dataset='coco', output_dim=32, unsupervised=False, with_tanh=True, gpus='1',
-                     pretrain=False, pretrain_evaluation=False, extract_features=False,
-                     finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_iteration_evaluations=[100, 200, 300, 400, 500, 600, 700, 800, 900],
+                     pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
                      lr=0.0065, decay_step=1000, decay_factor=0.5,
-                     gamma=20, q_lambda=0.055, hash_layer='fc8',
-                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
-                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
-                     ))
-argument_list.append(Arguments(
-                     dataset='coco', output_dim=48, unsupervised=False, with_tanh=True, gpus='1',
-                     pretrain=False, pretrain_evaluation=False, extract_features=False,
-                     finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     batch_size=256, val_batch_size=16, hamming_range=2, iter_num=2000,
-                     lr=0.00025, decay_step=1000, decay_factor=0.5,
-                     gamma=10, q_lambda=0.0, hash_layer='fc8',
-                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
-                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
-                     ))
-argument_list.append(Arguments(
-                     dataset='coco', output_dim=64, unsupervised=False, with_tanh=True, gpus='1',
-                     pretrain=True, pretrain_evaluation=True, extract_features=False,
-                     finetune_all_pretrain=True, pretrain_top_k=100,
-                     pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-9, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
-                     lr=0.001, decay_step=1000, decay_factor=0.5,
-                     gamma=10, q_lambda=0.1, hash_layer='fc8',
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',
                      regularization_factor=0.00, regularizer='average', reg_layer='hash',
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
+
+
 
 #args = parser.parse_args()
 
@@ -237,7 +199,7 @@ for args in argument_list:
     tf.reset_default_graph()
 
     if args.pretrain:
-        model.train(train_img, args, database_img=database_img)
+        weights, intermediate_maps = model.train(train_img, args, database_img=database_img, query_img=query_img)
         args.model_weights = args.pretrain_model_weights
 
     tf.reset_default_graph()

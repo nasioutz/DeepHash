@@ -6,17 +6,20 @@ import tensorflow as tf
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
 
 
-def train(train_img, config, database_img=None):
+def train(train_img, config, database_img=None, query_img=None):
 
     img_train = Dataset(train_img, config.output_dim)
     model = DCH(config)
     if config.pretrain:
-        img_database = Dataset(database_img, layer_output_dim[config.pretrn_layer])
-        model.pre_train(img_train, img_database)
+        databases = {'img_database_pretrain':Dataset(database_img, layer_output_dim[config.pretrn_layer]),
+                     'img_query_pretrain': Dataset(query_img, layer_output_dim[config.pretrn_layer]),
+                     'img_database': Dataset(database_img, config.output_dim),
+                     'img_query': Dataset(query_img, config.output_dim),}
+        model.pre_train(img_train, databases)
+        return model.save_file, model.intermediate_maps
     else:
         model.train(img_train)
-    return model.save_file
-
+        return model.save_file
 
 def validation(database_img, query_img, config):
     model = DCH(config)

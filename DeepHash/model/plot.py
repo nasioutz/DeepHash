@@ -12,11 +12,16 @@ _since_beginning = collections.defaultdict(lambda: {})
 _since_last_flush = collections.defaultdict(lambda: {})
 
 _iter = [0]
-def tick():
-	_iter[0] += 1
+def tick(add=1):
+	_iter[0] += add
+
+def set(value):
+	_iter[0] = value
 
 def plot(name, value):
-	_since_last_flush[name][_iter[0]] = value
+		_since_last_flush[name][_iter[0]] = value
+
+
 
 def flush(path = ""):
 	prints = []

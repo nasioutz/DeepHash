@@ -28,6 +28,7 @@ class DCH(object):
             self.stage = tf.placeholder_with_default(tf.constant(0), [])
         for k, v in vars(config).items():
             setattr(self, k, v)
+        self.config = config
         self.file_name = 'lr_{}_cqlambda_{}_alpha_{}_bias_{}_gamma_{}_dataset_{}'.format(
                 self.lr,
                 self.q_lambda,
@@ -116,7 +117,7 @@ class DCH(object):
             os.makedirs(self.save_dir)
 
         np.save(model_file, np.array(model))
-        return
+        return model_file
 
     def cauchy_cross_entropy(self, u, label_u, v=None, label_v=None, gamma=1, normed=True):
 
@@ -389,12 +390,15 @@ class DCH(object):
             return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
                                         (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
 
-    def pre_train(self, img_dataset,img_database=None):
+    def pre_train(self, img_train,databases):
 
+        img_dataset = img_train
+        self.intermediate_maps = []
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir+"_pretrain")
         if os.path.exists(tflog_path):
-            shutil.rmtree(tflog_path)
+            pass
+            #shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
 
         t_range = trange(self.pretrain_iter_num, desc="Starting PreTraining", leave=True)
@@ -403,7 +407,7 @@ class DCH(object):
             if not self.batch_targets and\
                (train_iter+1) % self.retargeting_step == 0 and\
                not (train_iter+1) == train_iter :
-                self.targets = self.feature_extraction(img_database, retargeting=True)
+                self.targets = self.feature_extraction(databases['img_database_pretrain'], retargeting=True)
 
 
             images, labels = img_dataset.next_batch(self.batch_size)
@@ -429,17 +433,45 @@ class DCH(object):
                                   .format(loss, eucl_loss, reg_loss))
             t_range.refresh()
 
+            if train_iter in self.intermediate_iteration_evaluations:
+                tf.reset_default_graph()
+                model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
+                inter_config = self.config
+                inter_config.model_weights = model_weights
+                inter_config.pretrain = False
+                inter_config.pretrain_evaluation = False
+                inter_config.training = True
+                inter_config.evaluate = True
+                inter_model = model = DCH(inter_config)
+                inter_model.train(img_train,close_session=False)
+                inter_config.model_weights = model.save_file
+                maps = inter_model.validation(databases['img_database'],databases['img_query'])
+                self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
+                plot.set(train_iter)
+                plot.plot('map',maps.get(list(maps.keys())[4]))
+                plot.plot('recall', maps.get(list(maps.keys())[3]))
+                plot.plot('precision', maps.get(list(maps.keys())[2]))
+
+
+        result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+        if os.path.exists(result_save_dir) is False:
+            os.makedirs(result_save_dir)
+        plot.flush(result_save_dir)
+
         self.save_model(self.save_file.split(".")[0]+"_pretrain."+self.save_file.split(".")[1])
         print("model saved")
 
         self.sess.close()
 
-    def train(self, img_dataset):
+        return self.intermediate_maps
+
+    def train(self, img_dataset, close_session=True):
 
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
         if os.path.exists(tflog_path):
-            shutil.rmtree(tflog_path)
+            pass
+        #    shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
         t_range = trange(self.iter_num, desc="Starting Training", leave=True)
         for train_iter in t_range:
@@ -469,7 +501,8 @@ class DCH(object):
         self.save_model()
         print("model saved")
 
-        self.sess.close()
+        if close_session:
+            self.sess.close()
 
     def pretrain_validation(self, img_query, img_database, R=100):
         if os.path.exists(self.save_dir) is False:
