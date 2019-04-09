@@ -14,8 +14,11 @@ from DeepHash.evaluation import MAPs
 import DeepHash.distance.tfversion as tfdist
 from tqdm import trange
 from math import ceil
+from DeepHash.model.dch.util import Dataset
 
 import examples.dch.target_extraction as t_extract
+
+layer_output_dim = {'conv5': 256, 'fc7': 4096}
 
 class DCH(object):
     def __init__(self, config):
@@ -333,10 +336,11 @@ class DCH(object):
         return opt.apply_gradients(grad_list, global_step=global_step)
 
 
-    def pre_train(self, img_train,databases):
+    def pre_train(self, databases):
 
-        img_dataset = img_train
+        img_dataset = Dataset(databases['img_train'], self.output_dim)
         self.intermediate_maps = []
+
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir+"_pretrain")
         if os.path.exists(tflog_path):
@@ -387,20 +391,20 @@ class DCH(object):
                 inter_config.training = True
                 inter_config.evaluate = True
                 inter_model = model = DCH(inter_config)
-                inter_model.train(img_train, close_session=False, verbose=False)
+                inter_model.train(databases, close_session=False, verbose=False)
                 inter_config.model_weights = model.save_file
-                maps = inter_model.validation(databases['img_database'], databases['img_query'], verbose=False)
+                maps = inter_model.validation(databases, verbose=False)
                 self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
                 plot.set(train_iter)
                 plot.plot('map',maps.get(list(maps.keys())[4]))
                 plot.plot('recall', maps.get(list(maps.keys())[3]))
                 plot.plot('precision', maps.get(list(maps.keys())[2]))
 
-        result_save_dir = os.path.join(tflog_path, "plots")
-        if os.path.exists(result_save_dir) is False:
-            os.makedirs(result_save_dir)
-        plot.flush(result_save_dir,"Ptrn Lyr: {}, LR: {}, Ptrn Ls: {}, Batch Tgt: {}".format(
-                                    self.pretrn_layer, self.pretrain_lr, self.pretrn_loss_type, self.batch_targets))
+                result_save_dir = os.path.join(tflog_path, "plots")
+                if os.path.exists(result_save_dir) is False:
+                    os.makedirs(result_save_dir)
+                plot.flush(result_save_dir,"Ptrn Lyr: {}, LR: {}, Ptrn Ls: {}, Batch Tgt: {}".format(
+                                            self.pretrn_layer, self.pretrain_lr, self.pretrn_loss_type, self.batch_targets))
 
         self.save_model(self.save_file.split(".")[0]+"_pretrain."+self.save_file.split(".")[1])
         print("model saved")
@@ -409,9 +413,11 @@ class DCH(object):
 
         return self.intermediate_maps
 
-    def train(self, img_dataset, databases,close_session=True, verbose=True):
+    def train(self, databases, close_session=True, verbose=True):
 
+        img_dataset = Dataset(databases['img_train'], self.output_dim)
         self.intermediate_maps = []
+
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
         if os.path.exists(tflog_path):
@@ -456,18 +462,19 @@ class DCH(object):
                 inter_config.training = False
                 inter_config.evaluate = True
                 inter_model = DCH(inter_config)
-                maps = inter_model.validation(databases['img_database'], databases['img_query'], verbose=False)
+                maps = inter_model.validation(databases, verbose=False)
                 self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
                 plot.set(train_iter)
                 plot.plot('map',maps.get(list(maps.keys())[4]))
                 plot.plot('recall', maps.get(list(maps.keys())[3]))
                 plot.plot('precision', maps.get(list(maps.keys())[2]))
 
-        result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
-        if os.path.exists(result_save_dir) is False:
-            os.makedirs(result_save_dir)
-        plot.flush(result_save_dir,"Bits: {}, LR: {}, Regularizer: {}, Reg. Factor: {}".format(
-                                    self.output_dim, self.lr, self.regularizer, self.regularization_factor))
+                result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+                if os.path.exists(result_save_dir) is False:
+                    os.makedirs(result_save_dir)
+
+                plot.flush(result_save_dir, "Bits: {}, LR: {}, Regularizer: {}, Reg. Factor: {}".format(
+                    self.output_dim, self.lr, self.regularizer, self.regularization_factor))
 
         self.save_model()
         print("model saved")
@@ -475,7 +482,11 @@ class DCH(object):
         if close_session:
             self.sess.close()
 
-    def pretrain_validation(self, img_query, img_database, close_session=True, verbose=True):
+    def pretrain_validation(self, databases, close_session=True, verbose=True):
+
+        img_database = Dataset(databases['img_database'], layer_output_dim[self.pretrn_layer])
+        img_query = Dataset(databases['img_query'], layer_output_dim[self.pretrn_layer])
+
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
 
@@ -616,7 +627,10 @@ class DCH(object):
         return t_extract.target_extraction(database_labels, database_output)
 
 
-    def validation(self, img_query, img_database, R=100,verbose=True):
+    def validation(self, databases, R=100,verbose=True):
+
+        img_database = Dataset(databases['img_database'], self.output_dim)
+        img_query = Dataset(databases['img_query'], self.output_dim)
 
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)

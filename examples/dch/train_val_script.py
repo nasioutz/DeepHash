@@ -146,10 +146,10 @@ argument_list.append(Arguments(
                      dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
                      pretrain=True, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     intermediate_pretrain_evaluations=[],
-                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=700,
+                     intermediate_pretrain_evaluations=[400,600,800,1000,1200,2000],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2020,
                      pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      intermediate_evaluations=[],
                      batch_size=256, val_batch_size=16, hamming_range=120, iter_num=1200,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=1000, decay_factor=0.5,
@@ -219,9 +219,6 @@ for args in argument_list:
     args.pretrain = False
     args.pretrain_evaluation = False
     tf.reset_default_graph()
-
-    train_img = dataset.import_train(data_root, args.img_tr)
-    query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
     if args.training:
         model_weights = model.train(train_img, args, database_img, query_img)
