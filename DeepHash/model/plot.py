@@ -23,7 +23,7 @@ def plot(name, value):
 
 
 
-def flush(path = ""):
+def flush(path = "",title=None):
 	prints = []
 
 	for name, vals in list(_since_last_flush.items()):
@@ -35,8 +35,16 @@ def flush(path = ""):
 
 		plt.clf()
 		plt.plot(x_vals, y_vals)
+
+		for i, j in zip(x_vals, y_vals):
+			plt.annotate(str(j), xy=(i, j))
+
 		plt.xlabel('iteration')
 		plt.ylabel(name)
+
+		if not title == None:
+			plt.title(title)
+
 		plt.savefig(os.path.join(path, name.replace(' ', '_')+'.png'))
 
 	print("iter {}\t{}".format(_iter[0], "\t".join(prints)))

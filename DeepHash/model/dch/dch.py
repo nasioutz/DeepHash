@@ -52,14 +52,10 @@ class DCH(object):
         self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = \
             self.load_model(self.pretrain or self.pretrain_evaluation)
 
-        if config.reg_layer == 'hash':
-            self.regularization_layer = self.img_last_layer
-        elif config.reg_layer == 'fc6':
-            self.regularization_layer = self.train_layers[10]
-        elif config.reg_layer == 'fc7':
-            self.regularization_layer = self.train_layers[12]
-        elif config.reg_layer == 'conv5':
-            self.regularization_layer = self.train_layers[8]
+        layer_len = len(self.train_layers)
+
+        self.layer_table = {'hash': self.img_last_layer, 'fc6': (self.train_layers[10] if layer_len > 10 else None),
+                            'fc7': (self.train_layers[12] if layer_len > 12 else None), 'conv5': self.train_layers[8]}
 
         self.global_step = tf.Variable(0, trainable=False)
 
@@ -71,7 +67,13 @@ class DCH(object):
 
             self.batch_target_op = self.batch_target_calculation()
 
+        self.loss_function = {'euclidean_distance': self.euclidian_distance_loss,
+                              'cauchy': self.cauchy_cross_entropy_loss,
+                              'average': self.average_loss,
+                              'negative_similarity': self.negative_similarity_loss}
+
         self.train_op = self.apply_loss_function(self.global_step)
+
 
         self.sess.run(tf.global_variables_initializer())
         return
@@ -112,14 +114,35 @@ class DCH(object):
         model = {}
         for layer in self.deep_param_img:
             model[layer] = self.sess.run(self.deep_param_img[layer])
-        print("saving model to %s" % model_file)
+        print("\nsaving model to %s" % model_file)
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
 
         np.save(model_file, np.array(model))
         return model_file
 
-    def cauchy_cross_entropy(self, u, label_u, v=None, label_v=None, gamma=1, normed=True):
+    def batch_target_calculation(self):
+
+        u = self.img_last_layer
+        label_u = self.img_label
+
+        shape1 = label_u.shape[1].value
+
+        targets = tf.constant(0.0, shape=[0, u.shape[1]])
+
+        for i in range(0, shape1):
+            targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
+                tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
+                           [-1, u.shape[1]]), 0), [1, -1]))], 0)
+
+        corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
+        # corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
+
+        #corrected_targets = tf.stop_gradient(corrected_targets)
+
+        return corrected_targets
+
+    def cauchy_cross_entropy_loss(self, u, label_u, v=None, label_v=None, gamma=1, normed=True):
 
 
         if v is None:
@@ -177,28 +200,7 @@ class DCH(object):
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
 
 
-    def batch_target_calculation(self):
-
-        u = self.img_last_layer
-        label_u = self.img_label
-
-        shape1 = label_u.shape[1].value
-
-        targets = tf.constant(0.0, shape=[0, u.shape[1]])
-
-        for i in range(0, shape1):
-            targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
-                tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
-                           [-1, u.shape[1]]), 0), [1, -1]))], 0)
-
-        corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
-        # corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
-
-        #corrected_targets = tf.stop_gradient(corrected_targets)
-
-        return corrected_targets
-
-    def euclidian_loss(self, u, label_u, v=None, label_v=None, normed=False):
+    def euclidian_distance_loss(self, u, label_u, normed=False):
 
         if self.extract_features:
 
@@ -212,7 +214,6 @@ class DCH(object):
                                [-1, u.shape[1]]), 0), [1, -1]))], 0)
 
             corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
-            #corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
 
             targets = tf.stop_gradient(corrected_targets)
 
@@ -231,60 +232,79 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, mean)
 
-
         loss = tf.reduce_mean(per_img_avg)
         return loss
 
-    def regularizing_layer(self):
 
-        if self.reg_layer == 'hash':
-            return self.img_last_layer
-        elif self.reg_layer == 'fc6':
-            return self.train_layers[10]
-        elif self.reg_layer == 'fc7':
-            return self.train_layers[12]
-        elif self.reg_layer == 'conv5':
-            return self.train_layers[8]
+    def average_loss(self, u, label_u, normed=False):
 
-    def regularizing_loss(self, u, label_u):
+        return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
 
-        if self.regularizer == 'average':
-            return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
-        elif self.regularizer == 'min_distance':
-            return tf.reduce_mean(tf.norm(tf.math.subtract(u[tf.math.top_k(-tf.norm(u, axis=0), 1).indices[0]],u),axis=1))
+    def negative_similarity_loss(self, u, label_u, normed=False):
+
+        if self.extract_features:
+
+            shape1 = label_u.shape[1].value
+
+            targets = tf.constant(0.0, shape=[0, u.shape[1]])
+
+            for i in range(0, shape1):
+                targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
+                    tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
+                               [-1, u.shape[1]]), 0), [1, -1]))], 0)
+
+            corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
+
+            targets = tf.stop_gradient(corrected_targets)
+
         else:
-            return 0.0
+            targets = self.targets
+
+        mean = tf.divide(
+            tf.reduce_sum(
+                tf.multiply(
+                    tf.cast(
+                        tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))), dtype=tf.float32),
+                    targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
+
+        if normed:
+            per_img_avg = tfdist.normed_euclidean2(u, mean)
+        else:
+            per_img_avg = tfdist.euclidean(u, mean)
+
+        per_img_negative_distance = tf.exp(tf.cast(tf.negative(per_img_avg),dtype=tf.float32))
+
+        return tf.reduce_mean(per_img_negative_distance)
 
     def apply_loss_function(self, global_step):
         # loss function
         if self.pretrain or self.pretrain_evaluation or self.extract_features:
-            self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
 
-            self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
-            self.reg_loss = self.reg_loss_img * self.regularization_factor
+            self.pretrain_loss = self.loss_function[self.pretrn_loss_type](self.img_last_layer, self.img_label)
 
-            self.loss = self.eucl_loss + self.reg_loss
+            self.main_loss = self.pretrain_loss
 
             learning_rate = self.pretrain_lr
             decay_step = self.pretrain_decay_step
 
-            tf.summary.scalar('euclidan_loss', self.eucl_loss)
+            tf.summary.scalar(self.pretrn_loss_type+" loss", self.pretrain_loss)
         else:
-            self.cos_loss = self.cauchy_cross_entropy(self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
+            self.train_loss = self.loss_function[self.trn_loss_type](self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
             self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
             self.q_loss = self.q_lambda * self.q_loss_img
 
-            self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
-            self.reg_loss = self.reg_loss_img * self.regularization_factor
-
-            self.loss = self.cos_loss + self.q_loss + self.reg_loss
+            self.main_loss = self.train_loss + self.q_loss
 
             learning_rate = self.lr
             decay_step = self.decay_step
 
-            tf.summary.scalar('cauchy_loss', self.cos_loss)
+            tf.summary.scalar(self.trn_loss_type+' loss', self.train_loss)
             tf.summary.scalar('quantization_loss', self.q_loss)
 
+        self.reg_loss_img = self.loss_function[self.regularizer](self.layer_table[self.reg_layer], self.img_label)
+        self.reg_loss = self.reg_loss_img * self.regularization_factor
+
+        self.loss = self.main_loss + self.reg_loss
 
         # Last layer has a 10 times learning rate
         lr = tf.train.exponential_decay(learning_rate, global_step, decay_step, learning_rate, staircase=True)
@@ -312,83 +332,6 @@ class DCH(object):
 
         return opt.apply_gradients(grad_list, global_step=global_step)
 
-    def apply_pretrain_fc7_loss_function(self, global_step):
-        ### loss function
-        self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
-        self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
-
-        self.reg_loss = self.reg_loss_img * self.regularization_factor
-        self.loss = self.eucl_loss + self.reg_loss
-
-        ### Last layer has a 10 times learning rate
-        lr = tf.train.exponential_decay(self.pretrain_lr, global_step, self.pretrain_decay_step, self.pretrain_lr, staircase=True)
-        opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9)
-        grads_and_vars = opt.compute_gradients(self.loss, self.train_layers+self.train_last_layer)
-        fcgrad, _ = grads_and_vars[-2]
-        fbgrad, _ = grads_and_vars[-1]
-
-        self.grads_and_vars = grads_and_vars
-        tf.summary.scalar('loss', self.loss)
-        tf.summary.scalar('cos_loss', self.eucl_loss)
-        tf.summary.scalar('q_loss', self.reg_loss)
-        tf.summary.scalar('lr', lr)
-        self.merged = tf.summary.merge_all()
-
-        if self.finetune_all_pretrain:
-            return opt.apply_gradients([(grads_and_vars[0][0], self.train_layers[0]),
-                                        (grads_and_vars[1][0]*2, self.train_layers[1]),
-                                        (grads_and_vars[2][0], self.train_layers[2]),
-                                        (grads_and_vars[3][0]*2, self.train_layers[3]),
-                                        (grads_and_vars[4][0], self.train_layers[4]),
-                                        (grads_and_vars[5][0]*2, self.train_layers[5]),
-                                        (grads_and_vars[6][0], self.train_layers[6]),
-                                        (grads_and_vars[7][0]*2, self.train_layers[7]),
-                                        (grads_and_vars[8][0], self.train_layers[8]),
-                                        (grads_and_vars[9][0]*2, self.train_layers[9]),
-                                        (grads_and_vars[10][0], self.train_layers[10]),
-                                        (grads_and_vars[11][0]*2, self.train_layers[11]),
-                                        (fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
-        else:
-            return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
-
-    def apply_pretrain_conv5_loss_function(self, global_step):
-        ### loss function
-        self.eucl_loss = self.euclidian_loss(self.img_last_layer, self.img_label, normed=False)
-        self.reg_loss_img = self.regularizing_loss(self.regularizing_layer(), self.img_label)
-
-        self.reg_loss = self.reg_loss_img * self.regularization_factor
-        self.loss = self.eucl_loss + self.reg_loss
-
-        ### Last layer has a 10 times learning rate
-        lr = tf.train.exponential_decay(self.pretrain_lr, global_step, self.pretrain_decay_step, self.pretrain_lr, staircase=True)
-        opt = tf.train.MomentumOptimizer(learning_rate=lr, momentum=0.9)
-        grads_and_vars = opt.compute_gradients(self.loss, self.train_layers+self.train_last_layer)
-        fcgrad, _ = grads_and_vars[-2]
-        fbgrad, _ = grads_and_vars[-1]
-
-        self.grads_and_vars = grads_and_vars
-        tf.summary.scalar('loss', self.loss)
-        tf.summary.scalar('cos_loss', self.eucl_loss)
-        tf.summary.scalar('q_loss', self.reg_loss)
-        tf.summary.scalar('lr', lr)
-        self.merged = tf.summary.merge_all()
-
-        if self.finetune_all:
-            return opt.apply_gradients([(grads_and_vars[0][0], self.train_layers[0]),
-                                        (grads_and_vars[1][0]*2, self.train_layers[1]),
-                                        (grads_and_vars[2][0], self.train_layers[2]),
-                                        (grads_and_vars[3][0]*2, self.train_layers[3]),
-                                        (grads_and_vars[4][0], self.train_layers[4]),
-                                        (grads_and_vars[5][0]*2, self.train_layers[5]),
-                                        (grads_and_vars[6][0], self.train_layers[6]),
-                                        (grads_and_vars[7][0]*2, self.train_layers[7]),
-                                        (fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
-        else:
-            return opt.apply_gradients([(fcgrad*10, self.train_last_layer[0]),
-                                        (fbgrad*20, self.train_last_layer[1])], global_step=global_step)
 
     def pre_train(self, img_train,databases):
 
@@ -407,7 +350,8 @@ class DCH(object):
             if not self.batch_targets and\
                (train_iter+1) % self.retargeting_step == 0 and\
                not (train_iter+1) == train_iter :
-                self.targets = self.feature_extraction(databases['img_database_pretrain'], retargeting=True)
+                self.targets = self.feature_extraction(databases['img_database_pretrain'],
+                                                       retargeting=True, close_session=False, verbose=False)
 
 
             images, labels = img_dataset.next_batch(self.batch_size)
@@ -418,9 +362,9 @@ class DCH(object):
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 
-            _, loss, eucl_loss, reg_loss, output, reg_output, summary = self.sess.run(
+            _, loss, pretrain_loss, reg_loss, output, reg_output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.eucl_loss, self.reg_loss, self.img_last_layer, self.regularization_layer, self.merged],
+                                        [self.train_op, self.loss, self.pretrain_loss, self.reg_loss, self.img_last_layer, self.layer_table[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -429,11 +373,11 @@ class DCH(object):
             #img_dataset.feed_batch_output(self.batch_size, output)
 
             t_range.set_description(
-                                  "PreTraining Model | Loss = {:2f}, Euclidean Distance Loss = {:2f}, Regularization Loss = {:2f}"
-                                  .format(loss, eucl_loss, reg_loss))
+                                  "PreTraining Model | Loss = {:2f}, {} Loss = {:2f}, Regularization Loss = {:2f}"
+                                  .format(loss, self.pretrn_loss_type, pretrain_loss, reg_loss))
             t_range.refresh()
 
-            if train_iter in self.intermediate_iteration_evaluations:
+            if train_iter in self.intermediate_pretrain_evaluations:
                 tf.reset_default_graph()
                 model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
                 inter_config = self.config
@@ -443,20 +387,20 @@ class DCH(object):
                 inter_config.training = True
                 inter_config.evaluate = True
                 inter_model = model = DCH(inter_config)
-                inter_model.train(img_train,close_session=False)
+                inter_model.train(img_train, close_session=False, verbose=False)
                 inter_config.model_weights = model.save_file
-                maps = inter_model.validation(databases['img_database'],databases['img_query'])
+                maps = inter_model.validation(databases['img_database'], databases['img_query'], verbose=False)
                 self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
                 plot.set(train_iter)
                 plot.plot('map',maps.get(list(maps.keys())[4]))
                 plot.plot('recall', maps.get(list(maps.keys())[3]))
                 plot.plot('precision', maps.get(list(maps.keys())[2]))
 
-
-        result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+        result_save_dir = os.path.join(tflog_path, "plots")
         if os.path.exists(result_save_dir) is False:
             os.makedirs(result_save_dir)
-        plot.flush(result_save_dir)
+        plot.flush(result_save_dir,"Ptrn Lyr: {}, LR: {}, Ptrn Ls: {}, Batch Tgt: {}".format(
+                                    self.pretrn_layer, self.pretrain_lr, self.pretrn_loss_type, self.batch_targets))
 
         self.save_model(self.save_file.split(".")[0]+"_pretrain."+self.save_file.split(".")[1])
         print("model saved")
@@ -465,24 +409,27 @@ class DCH(object):
 
         return self.intermediate_maps
 
-    def train(self, img_dataset, close_session=True):
+    def train(self, img_dataset, databases,close_session=True, verbose=True):
 
+        self.intermediate_maps = []
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
         if os.path.exists(tflog_path):
             pass
         #    shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
-        t_range = trange(self.iter_num, desc="Starting Training", leave=True)
+        t_range = trange(self.iter_num, desc="Starting Training",
+                         mininterval=self.iter_num//4 if not verbose else 0.1, leave=True)
         for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
 
             #self.regularization_layer = tf.print(self.regularization_layer, [self.regularization_layer], message='Regularization Layer: ')
             #self.img_last_layer = tf.print(self.img_last_layer, [self.img_last_layer], message='Last Layer: ')
 
-            _, loss, cos_loss, reg_loss, output, reg_output, summary = self.sess.run(
+            _, loss, train_loss, reg_loss, output, reg_output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.cos_loss, self.reg_loss, self.img_last_layer, self.regularization_layer, self.merged],
+                                        [self.train_op, self.loss, self.train_loss, self.reg_loss, self.img_last_layer,
+                                         self.layer_table[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -492,11 +439,35 @@ class DCH(object):
 
             #q_loss = loss - cos_loss
             q_loss = 0.0
-            t_range.set_description(
-                                  "Training Model | Loss = {:2f}, Cross_Entropy Loss = {:2f}, Quantization_Loss = {:2f}, Regularization Loss = {:2f}"
-                                  .format(loss, cos_loss, q_loss, reg_loss))
-            t_range.refresh()
 
+            if verbose:
+                t_range.set_description(
+                    "Training Model | Loss = {:2f}, {} Loss = {:2f}, Quantization_Loss = {:2f}, Regularization Loss = {:2f}"
+                        .format(loss, self.trn_loss_type, train_loss, q_loss, reg_loss))
+                t_range.refresh()
+
+            if train_iter in self.intermediate_evaluations:
+                tf.reset_default_graph()
+                model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
+                inter_config = self.config
+                inter_config.model_weights = model_weights
+                inter_config.pretrain = False
+                inter_config.pretrain_evaluation = False
+                inter_config.training = False
+                inter_config.evaluate = True
+                inter_model = DCH(inter_config)
+                maps = inter_model.validation(databases['img_database'], databases['img_query'], verbose=False)
+                self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
+                plot.set(train_iter)
+                plot.plot('map',maps.get(list(maps.keys())[4]))
+                plot.plot('recall', maps.get(list(maps.keys())[3]))
+                plot.plot('precision', maps.get(list(maps.keys())[2]))
+
+        result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+        if os.path.exists(result_save_dir) is False:
+            os.makedirs(result_save_dir)
+        plot.flush(result_save_dir,"Bits: {}, LR: {}, Regularizer: {}, Reg. Factor: {}".format(
+                                    self.output_dim, self.lr, self.regularizer, self.regularization_factor))
 
         self.save_model()
         print("model saved")
@@ -504,27 +475,28 @@ class DCH(object):
         if close_session:
             self.sess.close()
 
-    def pretrain_validation(self, img_query, img_database, R=100):
+    def pretrain_validation(self, img_query, img_database, close_session=True, verbose=True):
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
 
         query_batch = int(ceil(img_query.n_samples / float(self.val_batch_size)))
         img_query.finish_epoch()
 
-        q_range = trange(query_batch, desc="Starting Query Set for Pretraining Evaluation", leave=True)
+        q_range = trange(query_batch, desc="Starting Query Set for Pretraining Evaluation",
+                         mininterval=query_batch//4 if not verbose else 0.1, leave=False)
         for i in q_range:
 
             images, labels = img_query.next_batch(self.val_batch_size)
 
             output, loss = self.sess.run(
 
-                                   [self.img_last_layer, self.eucl_loss],
+                                   [self.img_last_layer, self.pretrain_loss],
                                    feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
                                    )
 
             img_query.feed_batch_output(self.val_batch_size, output)
 
-            q_range.set_description('Evaluating Pretraining Query | Cosine Loss: %s' % loss)
+            q_range.set_description('Evaluating Pretraining Query | Pretrain Loss: %s' % loss)
             q_range.refresh()
 
         if self.save_evaluation_models:
@@ -534,7 +506,8 @@ class DCH(object):
         database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
         img_database.finish_epoch()
 
-        d_range = trange(database_batch, desc="Starting Database Evaluation", leave=True)
+        d_range = trange(database_batch, desc="Starting Database Evaluation",
+                         mininterval=database_batch//4 if not verbose else 0.1, leave=True)
 
         for i in d_range:
 
@@ -543,20 +516,21 @@ class DCH(object):
 
             output, loss = self.sess.run(
 
-                                        [self.img_last_layer, self.eucl_loss],
+                                        [self.img_last_layer, self.pretrain_loss],
                                         feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
                                         )
 
             img_database.feed_batch_output(self.val_batch_size, output)
 
-            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+            d_range.set_description('Evaluating Database | Pretrain Loss: %s' % loss)
             d_range.refresh()
 
         if self.save_evaluation_models:
             with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
                 pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
 
-        self.sess.close()
+        if close_session:
+            self.sess.close()
 
         query_output = img_query.output
         database_output = img_database.output
@@ -581,7 +555,8 @@ class DCH(object):
         meanAP = 0.0
 
         t_range = trange(query_output.shape[0],
-                         desc='Calculating Mean Average Precision for k={}'.format(self.pretrain_top_k), leave=True)
+                         desc='Calculating Mean Average Precision for k={}'.format(self.pretrain_top_k),
+                         mininterval=query_output.shape[0]//4 if not verbose else 0.1, leave=True)
         for i in t_range:
 
             avp = eval_sess.run(ap, feed_dict={
@@ -593,7 +568,9 @@ class DCH(object):
 
             t_range.set_description('Calculating Mean Average Precision for k={} | Current Mean Average Precision: {}'
                                     .format(self.pretrain_top_k, np.divide(meanAP,float(i+1))))
-            t_range.refresh()
+            if verbose:
+                t_range.refresh()
+
 
         meanAP = np.divide(meanAP, query_output.shape[0])
 
@@ -601,7 +578,7 @@ class DCH(object):
 
         return {'mAP for k={} first'.format(self.pretrain_top_k): meanAP[0]}
 
-    def feature_extraction(self, img_database, retargeting=False):
+    def feature_extraction(self, img_database, close_session=True, verbose=True):
 
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
@@ -610,27 +587,27 @@ class DCH(object):
         img_database.finish_epoch()
 
         d_range = trange(database_batch, desc="Starting Database Evaluation",
-                         mininterval=120 if retargeting else 0.1, leave=False)
+                         mininterval=database_batch//4 if not verbose else 0.1, leave=False)
 
         for i in d_range:
             images, labels = img_database.next_batch(self.val_batch_size)
 
             output, loss = self.sess.run(
 
-                [self.img_last_layer, self.eucl_loss],
+                [self.img_last_layer, self.pretrain_loss],
                 feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
             )
 
             img_database.feed_batch_output(self.val_batch_size, output)
 
-           # d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
-           # d_range.refresh()
+            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+            d_range.refresh()
 
         if self.save_evaluation_models:
             with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
                 pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
 
-        if not retargeting:
+        if close_session:
             self.sess.close()
 
         database_output = img_database.output
@@ -639,7 +616,7 @@ class DCH(object):
         return t_extract.target_extraction(database_labels, database_output)
 
 
-    def validation(self, img_query, img_database, R=100):
+    def validation(self, img_query, img_database, R=100,verbose=True):
 
         if os.path.exists(self.save_dir) is False:
             os.makedirs(self.save_dir)
@@ -647,21 +624,23 @@ class DCH(object):
         query_batch = int(ceil(img_query.n_samples / float(self.val_batch_size)))
         img_query.finish_epoch()
 
-        q_range = trange(query_batch, desc="Starting Query Set Evaluation", leave=True)
+        q_range = trange(query_batch, desc="Starting Query Set Evaluation",
+                         mininterval=query_batch//4 if not verbose else 0.1, leave=True)
         for i in q_range:
 
             images, labels = img_query.next_batch(self.val_batch_size)
 
             output, loss = self.sess.run(
 
-                                   [self.img_last_layer, self.cos_loss],
+                                   [self.img_last_layer, self.train_loss],
                                    feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
                                    )
 
             img_query.feed_batch_output(self.val_batch_size, output)
 
-            q_range.set_description('Evaluating Query | Cosine Loss: %s' % loss)
-            q_range.refresh()
+            if verbose:
+                q_range.set_description('Evaluating Query | Cosine Loss: %s' % loss)
+                q_range.refresh()
 
         if self.save_evaluation_models:
             with open(join(self.save_dir, 'img_query.pkl'), 'wb') as output:
@@ -670,21 +649,23 @@ class DCH(object):
         database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
         img_database.finish_epoch()
 
-        d_range = trange(database_batch, desc="Starting Database Evaluation", leave=True)
+        d_range = trange(database_batch, desc="Starting Database Evaluation",
+                         mininterval=database_batch//4 if not verbose else 0.1, leave=True)
 
         for i in d_range:
             images, labels = img_database.next_batch(self.val_batch_size)
 
             output, loss = self.sess.run(
 
-                                        [self.img_last_layer, self.cos_loss],
+                                        [self.img_last_layer, self.train_loss],
                                         feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
                                         )
 
             img_database.feed_batch_output(self.val_batch_size, output)
 
-            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
-            d_range.refresh()
+            if verbose:
+                d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+                d_range.refresh()
 
         if self.save_evaluation_models:
             with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
@@ -696,7 +677,8 @@ class DCH(object):
 
         if self.evaluate_all_radiuses:
 
-            m_range = trange(self.hamming_range, desc="Calculating mAP @H<=", leave=True)
+            m_range = trange(self.hamming_range, desc="Calculating mAP @H<=",
+                             mininterval=self.hamming_range//4 if not verbose else 0.1, leave=True)
             #prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
             for i in m_range:
                 prec_i, rec_i, mmap_i = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
@@ -723,8 +705,8 @@ class DCH(object):
             prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
 
         return {
-            'i2i_by_feature': mAPs.get_mAPs_by_feature(img_database, img_query),
-            'i2i_after_sign': mAPs.get_mAPs_after_sign(img_database, img_query),
+            'i2i_by_feature': mAPs.get_mAPs_by_feature(img_database, img_query, verbose=verbose),
+            'i2i_after_sign': mAPs.get_mAPs_after_sign(img_database, img_query, verbose=verbose),
             'i2i_prec_radius_2': prec,
             'i2i_recall_radius_2': rec,
             'i2i_map_radius_2': mmap,

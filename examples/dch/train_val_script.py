@@ -35,7 +35,8 @@ class Arguments:
                        pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
                        pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
                        retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
-                       hash_layer='fc8', hamming_range=None, intermediate_iteration_evaluations=None):
+                       hash_layer='fc8', hamming_range=None, intermediate_pretrain_evaluations=[], intermediate_evaluations=[],
+                       pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy'):
 
 
         self.dataset = dataset
@@ -56,6 +57,7 @@ class Arguments:
         self.unsupervised = unsupervised
 
         self.pretrain = pretrain
+        self.pretrn_loss_type = pretrn_loss_type
         self.pretrn_layer = pretrn_layer
         self.pretrain_iter_num = pretrain_iter_num
         self.pretrain_lr = pretrain_lr
@@ -66,6 +68,7 @@ class Arguments:
         self.retargeting_step = retargeting_step
 
         self.training = training
+        self.trn_loss_type = trn_loss_type
         self.gamma = gamma
         self.q_lambda = q_lambda
         self.hash_layer = hash_layer
@@ -82,7 +85,8 @@ class Arguments:
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
 
-        self.intermediate_iteration_evaluations = intermediate_iteration_evaluations
+        self.intermediate_evaluations = intermediate_evaluations
+        self.intermediate_pretrain_evaluations = intermediate_pretrain_evaluations
         self.random_query = random_query
         self.evaluate = evaluate
         self.evaluate_all_radiuses = evaluate_all_radiuses
@@ -142,17 +146,19 @@ argument_list.append(Arguments(
                      dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
                      pretrain=True, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     intermediate_iteration_evaluations=[100, 200, 300, 400, 500, 600, 700, 800, 900],
-                     pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=700,
                      pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=False, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
-                     lr=0.0065, decay_step=1000, decay_factor=0.5,
+                     training=True, evaluate=True, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=1200,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=1000, decay_factor=0.5,
                      gamma=35, q_lambda=0.055, hash_layer='fc8',
-                     regularization_factor=0.00, regularizer='average', reg_layer='hash',
+                     reg_layer='hash', regularizer='average', regularization_factor=0.0,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
+
 
 
 
@@ -218,7 +224,7 @@ for args in argument_list:
     query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
     if args.training:
-        model_weights = model.train(train_img, args)
+        model_weights = model.train(train_img, args, database_img, query_img)
         args.model_weights = model_weights
 
     if args.evaluate:

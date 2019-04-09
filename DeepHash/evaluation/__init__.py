@@ -5,11 +5,12 @@ from DeepHash.util import sign
 
 
 # optimized
-def get_mAPs(q_output, q_labels, db_output, db_labels, Rs, dist_type):
+def get_mAPs(q_output, q_labels, db_output, db_labels, Rs, dist_type, verbose=True):
     dist = distance(q_output, db_output, dist_type=dist_type, pair=True)
     unsorted_ids = np.argpartition(dist, Rs - 1)[:, :Rs]
     APx = []
-    t_range = trange(dist.shape[0], desc="get_mAPS", leave=True)
+    t_range = trange(dist.shape[0], desc="get_mAPS",
+                     mininterval=dist.shape[0]//4 if not verbose else 0.1, leave=True)
     for i in t_range:
         label = q_labels[i, :]
         label[label == 0] = -1
@@ -24,7 +25,7 @@ def get_mAPs(q_output, q_labels, db_output, db_labels, Rs, dist_type):
     return np.mean(np.array(APx))
 
 
-def get_mAPs_rerank(q_output, q_labels, db_output, db_labels, Rs, dist_type):
+def get_mAPs_rerank(q_output, q_labels, db_output, db_labels, Rs, dist_type, verbose=True):
     query_output = sign(q_output)
     database_output = sign(db_output)
 
@@ -70,22 +71,22 @@ class MAPs:
     def __init__(self, R):
         self.R = R
 
-    def get_mAPs_by_feature(self, database, query, Rs=None, dist_type='inner_product'):
+    def get_mAPs_by_feature(self, database, query, Rs=None, dist_type='inner_product', verbose=True):
         if Rs is None:
             Rs = self.R
-        return get_mAPs(query.output, query.label, database.output, database.label, Rs, dist_type)
+        return get_mAPs(query.output, query.label, database.output, database.label, Rs, dist_type, verbose=verbose)
 
-    def get_mAPs_after_sign(self, database, query, Rs=None, dist_type='inner_product'):
+    def get_mAPs_after_sign(self, database, query, Rs=None, dist_type='inner_product', verbose=True):
         if Rs is None:
             Rs = self.R
         q_output = sign(query.output)
         db_output = sign(database.output)
-        return get_mAPs(q_output, query.label, db_output, database.label, Rs, dist_type)
+        return get_mAPs(q_output, query.label, db_output, database.label, Rs, dist_type, verbose=verbose)
 
-    def get_mAPs_after_sign_with_feature_rerank(self, database, query, Rs=None, dist_type='inner_product'):
+    def get_mAPs_after_sign_with_feature_rerank(self, database, query, Rs=None, dist_type='inner_product', verbose=True):
         if Rs is None:
             Rs = self.R
-        return get_mAPs_rerank(query.output, query.label, database.output, database.label, Rs, dist_type)
+        return get_mAPs_rerank(query.output, query.label, database.output, database.label, Rs, dist_type, verbose=verbose)
 
     @staticmethod
     def get_precision_recall_by_Hamming_Radius(database, query, radius=2):
