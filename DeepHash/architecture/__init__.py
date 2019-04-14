@@ -237,6 +237,7 @@ def img_alexnet_layers(img, batch_size, output_dim, stage, model_weights, with_t
 
 def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights, backup_model_weights, with_tanh=True, val_batch_size=32, final_layer='fc8', hash=True,):
     deep_param_img = {}
+    layer_output = {}
     train_layers = []
     train_last_layer = []
     # print("loading img model from %s" % model_weights)
@@ -296,6 +297,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         conv1 = tf.nn.relu(out, name=scope)
         deep_param_img['conv1'] = [kernel, biases]
         train_layers += [kernel, biases]
+        layer_output['conv1'] = conv1
 
     # Pool1
     pool1 = tf.nn.max_pool(conv1,
@@ -335,6 +337,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         out = tf.nn.bias_add(conv, biases)
         conv2 = tf.nn.relu(out, name=scope)
         deep_param_img['conv2'] = [kernel, biases]
+        layer_output['conv2'] = conv2
         train_layers += [kernel, biases]
 
     # Pool2
@@ -364,6 +367,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         out = tf.nn.bias_add(conv, biases)
         conv3 = tf.nn.relu(out, name=scope)
         deep_param_img['conv3'] = [kernel, biases]
+        layer_output['conv3'] = conv3
         train_layers += [kernel, biases]
 
     # Conv4
@@ -385,6 +389,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         out = tf.nn.bias_add(conv, biases)
         conv4 = tf.nn.relu(out, name=scope)
         deep_param_img['conv4'] = [kernel, biases]
+        layer_output['conv4'] = conv4
         train_layers += [kernel, biases]
 
     # Conv5
@@ -429,6 +434,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
             last_layer_output = tf.reduce_max(tf.reshape(conv5, [tf.shape(conv5)[0], conv5.get_shape()[1]*conv5.get_shape()[2], conv5.get_shape()[3]]), 1)
         else:
             train_layers += [kernel, biases]
+            layer_output['conv5'] = conv5
 
     # Pool5
     pool5 = tf.nn.max_pool(conv5,
@@ -457,6 +463,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
 
         if final_layer == 'fc8' or final_layer == 'fc7':
             deep_param_img['fc6'] = [fc6w, fc6b]
+            #layer_output['fc6'] = fc6
             train_layers += [fc6w, fc6b]
         else:
             pass
@@ -490,7 +497,8 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
             fc7 = tf.cond(stage > 0, lambda: fc7n, lambda: tf.nn.dropout(tf.nn.relu(fc7n), 0.5))
 
         if final_layer == 'fc8':
-            deep_param_img['fc6'] = [fc6w, fc6b]
+            deep_param_img['fc7'] = [fc7w, fc7b]
+            layer_output['fc7'] = fc7
             train_layers += [fc6w, fc6b]
         elif final_layer == 'fc7':
             deep_param_img['fc7'] = [fc7w, fc7b]
@@ -528,6 +536,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
 
         if final_layer == 'fc8':
             deep_param_img['fc8'] = [fc8w, fc8b]
+            layer_output['fc8'] = fc8
             train_last_layer += [fc8w, fc8b]
             last_layer_output = fc8
         else:
@@ -535,7 +544,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
 
     # print("img model loading finished")
     # Return outputs
-    return last_layer_output, deep_param_img, train_layers, train_last_layer
+    return last_layer_output, layer_output, deep_param_img, train_layers, train_last_layer
 
 
 def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_weights, with_tanh=True, val_batch_size=32):

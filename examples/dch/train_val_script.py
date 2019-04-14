@@ -36,7 +36,8 @@ class Arguments:
                        pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
                        retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
                        hash_layer='fc8', hamming_range=None, intermediate_pretrain_evaluations=[], intermediate_evaluations=[],
-                       pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy'):
+                       pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy', extract_hashlayer_features=False,
+                       reg_batch_targets=False):
 
 
         self.dataset = dataset
@@ -80,13 +81,14 @@ class Arguments:
         self.regularization_factor = regularization_factor
         self.reg_layer = reg_layer
         self.regularizer = regularizer
+        self.reg_batch_targets = reg_batch_targets
 
         self.iter_num = iter_num
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
 
-        self.intermediate_evaluations = intermediate_evaluations
-        self.intermediate_pretrain_evaluations = intermediate_pretrain_evaluations
+        self.intermediate_evaluations = [ie - 1 for ie in intermediate_evaluations]
+        self.intermediate_pretrain_evaluations = [ipe - 1 for ipe in intermediate_pretrain_evaluations]
         self.random_query = random_query
         self.evaluate = evaluate
         self.evaluate_all_radiuses = evaluate_all_radiuses
@@ -99,6 +101,7 @@ class Arguments:
         self.model_weights = model_weights
         self.finetune_all = finetune_all
         self.extract_features = extract_features
+        self.extract_hashlayer_features = extract_hashlayer_features
 
         self.img_model = img_model
         self.alpha = alpha
@@ -144,17 +147,17 @@ argument_list = []
 
 argument_list.append(Arguments(
                      dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
-                     pretrain=True, pretrain_evaluation=False, extract_features=False,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
-                     intermediate_pretrain_evaluations=[400,600,800,1000,1200,2000],
-                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2020,
-                     pretrain_lr=5e-5, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='negative_similarity', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[],
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=1200,
-                     trn_loss_type='cauchy', lr=0.0065, decay_step=1000, decay_factor=0.5,
-                     gamma=35, q_lambda=0.055, hash_layer='fc8',
-                     reg_layer='hash', regularizer='average', regularization_factor=0.0,
+                     intermediate_evaluations=[200, 400, 600, 800, 1000, 1200],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     reg_layer='fc8', regularizer='negative_similarity', regularization_factor=0.025,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
@@ -218,6 +221,13 @@ for args in argument_list:
 
     args.pretrain = False
     args.pretrain_evaluation = False
+    tf.reset_default_graph()
+
+    if args.extract_hashlayer_features:
+        new_features = model.hashlayer_feature_extraction(database_img, args)
+        np.save(join(args.file_path,"DeepHash","data_provider","extracted_targets",args.dataset,args.hash_layer+'_'+str(args.output_dim)+".npy"),new_features)
+        args.extract_hashlayer_features = False
+
     tf.reset_default_graph()
 
     if args.training:

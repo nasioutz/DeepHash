@@ -37,8 +37,13 @@ def validation(database_img, query_img, config):
 def feature_extraction(database_img, config):
 
     model = DCH(config)
-
     img_database = Dataset(database_img, layer_output_dim[config.pretrn_layer])
+    return model.feature_extraction(img_database)
 
+
+def hashlayer_feature_extraction(database_img, config):
+
+    model = DCH(config)
+    img_database = Dataset(database_img, config.output_dim)
     return model.feature_extraction(img_database)
 

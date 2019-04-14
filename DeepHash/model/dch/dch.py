@@ -15,6 +15,7 @@ import DeepHash.distance.tfversion as tfdist
 from tqdm import trange
 from math import ceil
 from DeepHash.model.dch.util import Dataset
+import copy
 
 import examples.dch.target_extraction as t_extract
 
@@ -52,23 +53,34 @@ class DCH(object):
         ### Create variables and placeholders
         self.img = tf.placeholder(tf.float32, [None, 256, 256, 3])
         self.img_label = tf.placeholder(tf.float32, [None, self.label_dim])
-        self.img_last_layer, self.deep_param_img, self.train_layers, self.train_last_layer = \
+        self.img_last_layer, self.img_train_layer, self.deep_param_img, self.train_layers, self.train_last_layer = \
             self.load_model(self.pretrain or self.pretrain_evaluation)
 
         layer_len = len(self.train_layers)
 
-        self.layer_table = {'hash': self.img_last_layer, 'fc6': (self.train_layers[10] if layer_len > 10 else None),
-                            'fc7': (self.train_layers[12] if layer_len > 12 else None), 'conv5': self.train_layers[8]}
+        self.layer_table = {'hash': self.img_last_layer, 'fc8': self.img_last_layer,
+                            'fc6': (self.train_layers[10] if layer_len > 10 else None),
+                            'fc7': (self.train_layers[12] if layer_len > 12 else None),
+                            'conv5': self.train_layers[8]}
 
         self.global_step = tf.Variable(0, trainable=False)
 
-        if self.pretrain or self.pretrain_evaluation or self.extract_features:
+        if not self.extract_features:
+            self.targets = np.load(
+            join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
+                 self.dataset, self.pretrn_layer + ".npy"))
 
-            if not self.extract_features:
-                self.targets = np.load(
-                join(self.file_path, "DeepHash", "data_provider", "extracted_targets", self.dataset, self.pretrn_layer + ".npy"))
+        if not self.extract_hashlayer_features:
+            if self.reg_layer == 'fc8':
+                filename = self.reg_layer+"_" + str(self.output_dim)
+            else:
+                filename = self.reg_layer
 
-            self.batch_target_op = self.batch_target_calculation()
+            self.targets = np.load(
+            join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
+                 self.dataset, filename + ".npy"))
+
+        self.batch_target_op = self.batch_target_calculation()
 
         self.loss_function = {'euclidean_distance': self.euclidian_distance_loss,
                               'cauchy': self.cauchy_cross_entropy_loss,
@@ -245,7 +257,7 @@ class DCH(object):
 
     def negative_similarity_loss(self, u, label_u, normed=False):
 
-        if self.extract_features:
+        if self.extract_features or self.extract_hashlayer_features:
 
             shape1 = label_u.shape[1].value
 
@@ -281,7 +293,7 @@ class DCH(object):
 
     def apply_loss_function(self, global_step):
         # loss function
-        if self.pretrain or self.pretrain_evaluation or self.extract_features:
+        if self.pretrain or self.pretrain_evaluation or self.extract_features or self.extract_hashlayer_features:
 
             self.pretrain_loss = self.loss_function[self.pretrn_loss_type](self.img_last_layer, self.img_label)
 
@@ -304,7 +316,7 @@ class DCH(object):
             tf.summary.scalar(self.trn_loss_type+' loss', self.train_loss)
             tf.summary.scalar('quantization_loss', self.q_loss)
 
-        self.reg_loss_img = self.loss_function[self.regularizer](self.layer_table[self.reg_layer], self.img_label)
+        self.reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer], self.img_label)
         self.reg_loss = self.reg_loss_img * self.regularization_factor
 
         self.loss = self.main_loss + self.reg_loss
@@ -368,7 +380,7 @@ class DCH(object):
 
             _, loss, pretrain_loss, reg_loss, output, reg_output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.pretrain_loss, self.reg_loss, self.img_last_layer, self.layer_table[self.reg_layer], self.merged],
+                                        [self.train_op, self.loss, self.pretrain_loss, self.reg_loss, self.img_last_layer, self.img_train_layer[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -384,7 +396,7 @@ class DCH(object):
             if train_iter in self.intermediate_pretrain_evaluations:
                 tf.reset_default_graph()
                 model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
-                inter_config = self.config
+                inter_config = copy.deepcopy(self.config)
                 inter_config.model_weights = model_weights
                 inter_config.pretrain = False
                 inter_config.pretrain_evaluation = False
@@ -426,16 +438,25 @@ class DCH(object):
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
         t_range = trange(self.iter_num, desc="Starting Training",
                          mininterval=self.iter_num//4 if not verbose else 0.1, leave=True)
+
+
+
         for train_iter in t_range:
             images, labels = img_dataset.next_batch(self.batch_size)
 
             #self.regularization_layer = tf.print(self.regularization_layer, [self.regularization_layer], message='Regularization Layer: ')
             #self.img_last_layer = tf.print(self.img_last_layer, [self.img_last_layer], message='Last Layer: ')
 
+            if self.regularizer == 'negative_similariry' and self.regularization_factor > 0 and self.reg_batch_targets:
+                self.targets = self.sess.run(
+                        self.batch_target_op,
+                        feed_dict={self.img: images, self.img_label: labels}
+                )
+
             _, loss, train_loss, reg_loss, output, reg_output, summary = self.sess.run(
 
                                         [self.train_op, self.loss, self.train_loss, self.reg_loss, self.img_last_layer,
-                                         self.layer_table[self.reg_layer], self.merged],
+                                         self.img_train_layer[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -455,12 +476,13 @@ class DCH(object):
             if train_iter in self.intermediate_evaluations:
                 tf.reset_default_graph()
                 model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
-                inter_config = self.config
+                inter_config = copy.deepcopy(self.config)
                 inter_config.model_weights = model_weights
                 inter_config.pretrain = False
                 inter_config.pretrain_evaluation = False
                 inter_config.training = False
                 inter_config.evaluate = True
+                print(self.config.evaluate)
                 inter_model = DCH(inter_config)
                 maps = inter_model.validation(databases, verbose=False)
                 self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]

@@ -16,12 +16,10 @@ def tick(add=1):
 	_iter[0] += add
 
 def set(value):
-	_iter[0] = value
+	_iter[0] = value + 1
 
 def plot(name, value):
 		_since_last_flush[name][_iter[0]] = value
-
-
 
 def flush(path = "",title=None):
 	prints = []
@@ -47,7 +45,7 @@ def flush(path = "",title=None):
 
 		plt.savefig(os.path.join(path, name.replace(' ', '_')+'.png'))
 
-	print("iter {}\t{}".format(_iter[0], "\t".join(prints)))
+	#print("iter {}\t{}".format(_iter[0], "\t".join(prints)))
 	_since_last_flush.clear()
 
 	with open('log.pkl', 'wb') as f:
