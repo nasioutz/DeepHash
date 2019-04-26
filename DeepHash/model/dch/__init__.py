@@ -6,7 +6,7 @@ import tensorflow as tf
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
 
 
-def train(train_img, config, database_img=None, query_img=None):
+def train(train_img, config, database_img=None, query_img=None, train_iteration=1):
 
     databases = {'img_database': database_img,
                  'img_query': query_img,
@@ -16,10 +16,10 @@ def train(train_img, config, database_img=None, query_img=None):
 
     if config.pretrain:
         model.pre_train(databases)
-        return model.save_file, model.intermediate_maps
     else:
-        model.train(databases)
-        return model.save_file
+        model.train(databases, train_iteration)
+
+    return model.save_file, model.training_results
 
 def validation(database_img, query_img, config):
 

@@ -58,11 +58,6 @@ class DCH(object):
 
         layer_len = len(self.train_layers)
 
-        self.layer_table = {'hash': self.img_last_layer, 'fc8': self.img_last_layer,
-                            'fc6': (self.train_layers[10] if layer_len > 10 else None),
-                            'fc7': (self.train_layers[12] if layer_len > 12 else None),
-                            'conv5': self.train_layers[8]}
-
         self.global_step = tf.Variable(0, trainable=False)
 
         if not self.extract_features:
@@ -70,7 +65,7 @@ class DCH(object):
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.pretrn_layer + ".npy"))
 
-        if not self.extract_hashlayer_features:
+        if (not self.extract_hashlayer_features) and self.regularizer == 'negative_similarity':
             if self.reg_layer == 'fc8':
                 filename = self.reg_layer+"_" + str(self.output_dim)
             else:
@@ -308,18 +303,21 @@ class DCH(object):
             self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
             self.q_loss = self.q_lambda * self.q_loss_img
 
-            self.main_loss = self.train_loss + self.q_loss
+            self.reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer],
+                                                                     self.img_label)
+
+            self.reg_loss = self.reg_loss_img * self.regularization_factor
+
+            self.main_loss = self.train_loss + self.q_loss + self.reg_loss
 
             learning_rate = self.lr
             decay_step = self.decay_step
 
             tf.summary.scalar(self.trn_loss_type+' loss', self.train_loss)
             tf.summary.scalar('quantization_loss', self.q_loss)
+            tf.summary.scalar('regularization_loss', self.reg_loss)
 
-        self.reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer], self.img_label)
-        self.reg_loss = self.reg_loss_img * self.regularization_factor
-
-        self.loss = self.main_loss + self.reg_loss
+        self.loss = self.main_loss
 
         # Last layer has a 10 times learning rate
         lr = tf.train.exponential_decay(learning_rate, global_step, decay_step, learning_rate, staircase=True)
@@ -330,7 +328,7 @@ class DCH(object):
 
         self.grads_and_vars = grads_and_vars
 
-        tf.summary.scalar('regularization_loss', self.reg_loss)
+
         tf.summary.scalar('loss', self.loss)
         tf.summary.scalar('lr', lr)
         self.merged = tf.summary.merge_all()
@@ -378,9 +376,9 @@ class DCH(object):
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 
-            _, loss, pretrain_loss, reg_loss, output, reg_output, summary = self.sess.run(
+            _, loss, pretrain_loss, reg_loss, output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.pretrain_loss, self.reg_loss, self.img_last_layer, self.img_train_layer[self.reg_layer], self.merged],
+                                        [self.train_op, self.loss, self.pretrain_loss, self.img_last_layer, self.img_train_layer[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -389,8 +387,8 @@ class DCH(object):
             #img_dataset.feed_batch_output(self.batch_size, output)
 
             t_range.set_description(
-                                  "PreTraining Model | Loss = {:2f}, {} Loss = {:2f}, Regularization Loss = {:2f}"
-                                  .format(loss, self.pretrn_loss_type, pretrain_loss, reg_loss))
+                                  "PreTraining Model | Loss = {:2f}, {} Loss = {:2f}"
+                                  .format(loss, self.pretrn_loss_type, pretrain_loss))
             t_range.refresh()
 
             if train_iter in self.intermediate_pretrain_evaluations:
@@ -425,10 +423,10 @@ class DCH(object):
 
         return self.intermediate_maps
 
-    def train(self, databases, close_session=True, verbose=True):
+    def train(self, databases, training_iteration=1, close_session=True, verbose=True):
 
         img_dataset = Dataset(databases['img_train'], self.output_dim)
-        self.intermediate_maps = []
+        self.training_results = []
 
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
@@ -482,27 +480,31 @@ class DCH(object):
                 inter_config.pretrain_evaluation = False
                 inter_config.training = False
                 inter_config.evaluate = True
-                print(self.config.evaluate)
                 inter_model = DCH(inter_config)
                 maps = inter_model.validation(databases, verbose=False)
-                self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
+                self.training_results = \
+                self.training_results + [[maps.get(list(maps.keys())[4]), maps.get(list(maps.keys())[3]), maps.get(list(maps.keys())[2])]]
                 plot.set(train_iter)
                 plot.plot('map',maps.get(list(maps.keys())[4]))
                 plot.plot('recall', maps.get(list(maps.keys())[3]))
                 plot.plot('precision', maps.get(list(maps.keys())[2]))
 
-                result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
+                result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots_"+str(training_iteration))
                 if os.path.exists(result_save_dir) is False:
                     os.makedirs(result_save_dir)
 
                 plot.flush(result_save_dir, "Bits: {}, LR: {}, Regularizer: {}, Reg. Factor: {}".format(
                     self.output_dim, self.lr, self.regularizer, self.regularization_factor))
 
+
+
         self.save_model()
         print("model saved")
 
         if close_session:
             self.sess.close()
+
+        return self.training_results
 
     def pretrain_validation(self, databases, close_session=True, verbose=True):
 

@@ -430,6 +430,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         deep_param_img['conv5'] = [kernel, biases]
 
         if final_layer == 'conv5':
+            layer_output['hash'] = conv5
             train_last_layer += [kernel, biases]
             last_layer_output = tf.reduce_max(tf.reshape(conv5, [tf.shape(conv5)[0], conv5.get_shape()[1]*conv5.get_shape()[2], conv5.get_shape()[3]]), 1)
         else:
@@ -502,6 +503,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
             train_layers += [fc6w, fc6b]
         elif final_layer == 'fc7':
             deep_param_img['fc7'] = [fc7w, fc7b]
+            layer_output['hash'] = fc7
             train_last_layer += [fc7w, fc7b]
             last_layer_output = fc7
         else:
@@ -537,6 +539,7 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
         if final_layer == 'fc8':
             deep_param_img['fc8'] = [fc8w, fc8b]
             layer_output['fc8'] = fc8
+            layer_output['hash'] = fc8
             train_last_layer += [fc8w, fc8b]
             last_layer_output = fc8
         else:
@@ -546,189 +549,6 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
     # Return outputs
     return last_layer_output, layer_output, deep_param_img, train_layers, train_last_layer
 
-
-def img_alexnet_layers_pretrain_conv5(img, batch_size, output_dim, stage, model_weights, with_tanh=True, val_batch_size=32):
-    deep_param_img = {}
-    train_layers = []
-    train_last_layer = []
-    #print("loading img model from %s" % model_weights)
-    net_data = dict(np.load(model_weights, encoding='bytes').item())
-    #print(list(net_data.keys()))
-
-    # swap(2,1,0), bgr -> rgb
-    reshaped_image = tf.cast(img, tf.float32)[:, :, :, ::-1]
-
-    height = 227
-    width = 227
-
-    # Randomly crop a [height, width] section of each image
-    with tf.name_scope('preprocess'):
-        def train_fn():
-            return tf.stack([tf.random_crop(tf.image.random_flip_left_right(each), [height, width, 3])
-                             for each in tf.unstack(reshaped_image, batch_size)])
-
-        def val_fn():
-            unstacked = tf.unstack(reshaped_image, val_batch_size)
-
-            def crop(img, x, y): return tf.image.crop_to_bounding_box(
-                img, x, y, width, height)
-
-            def distort(f, x, y): return tf.stack(
-                [crop(f(each), x, y) for each in unstacked])
-
-            def distort_raw(x, y): return distort(lambda x: x, x, y)
-
-            def distort_fliped(x, y): return distort(
-                tf.image.flip_left_right, x, y)
-            distorted = tf.concat([distort_fliped(0, 0), distort_fliped(28, 0),
-                                   distort_fliped(
-                                       0, 28), distort_fliped(28, 28),
-                                   distort_fliped(14, 14), distort_raw(0, 0),
-                                   distort_raw(28, 0), distort_raw(0, 28),
-                                   distort_raw(28, 28), distort_raw(14, 14)], 0)
-
-            return distorted
-        distorted = tf.cond(stage > 0, val_fn, train_fn)
-
-        # Zero-mean input
-        mean = tf.constant([103.939, 116.779, 123.68], dtype=tf.float32, shape=[
-                           1, 1, 1, 3], name='img-mean')
-        distorted = distorted - mean
-
-    # Conv1
-    # Output 96, kernel 11, stride 4
-    with tf.name_scope('conv1') as scope:
-        kernel = tf.Variable(net_data['conv1'][0], name='weights')
-        conv = tf.nn.conv2d(distorted, kernel, [1, 4, 4, 1], padding='VALID')
-        biases = tf.Variable(net_data['conv1'][1], name='biases')
-        out = tf.nn.bias_add(conv, biases)
-        conv1 = tf.nn.relu(out, name=scope)
-        deep_param_img['conv1'] = [kernel, biases]
-        train_layers += [kernel, biases]
-
-    # Pool1
-    pool1 = tf.nn.max_pool(conv1,
-                           ksize=[1, 3, 3, 1],
-                           strides=[1, 2, 2, 1],
-                           padding='VALID',
-                           name='pool1')
-
-    # LRN1
-    radius = 2
-    alpha = 2e-05
-    beta = 0.75
-    bias = 1.0
-    lrn1 = tf.nn.local_response_normalization(pool1,
-                                              depth_radius=radius,
-                                              alpha=alpha,
-                                              beta=beta,
-                                              bias=bias)
-
-    # Conv2
-    # Output 256, pad 2, kernel 5, group 2
-    with tf.name_scope('conv2') as scope:
-        kernel = tf.Variable(net_data['conv2'][0], name='weights')
-        group = 2
-
-        def convolve(i, k): return tf.nn.conv2d(
-            i, k, [1, 1, 1, 1], padding='SAME')
-        input_groups = tf.split(lrn1, group, 3)
-        kernel_groups = tf.split(kernel, group, 3)
-        output_groups = [convolve(i, k)
-                         for i, k in zip(input_groups, kernel_groups)]
-        # Concatenate the groups
-        conv = tf.concat(output_groups, 3)
-
-        biases = tf.Variable(net_data['conv2'][1], name='biases')
-        out = tf.nn.bias_add(conv, biases)
-        conv2 = tf.nn.relu(out, name=scope)
-        deep_param_img['conv2'] = [kernel, biases]
-        train_layers += [kernel, biases]
-
-    # Pool2
-    pool2 = tf.nn.max_pool(conv2,
-                           ksize=[1, 3, 3, 1],
-                           strides=[1, 2, 2, 1],
-                           padding='VALID',
-                           name='pool2')
-
-    # LRN2
-    radius = 2
-    alpha = 2e-05
-    beta = 0.75
-    bias = 1.0
-    lrn2 = tf.nn.local_response_normalization(pool2,
-                                              depth_radius=radius,
-                                              alpha=alpha,
-                                              beta=beta,
-                                              bias=bias)
-
-    # Conv3
-    # Output 384, pad 1, kernel 3
-    with tf.name_scope('conv3') as scope:
-        kernel = tf.Variable(net_data['conv3'][0], name='weights')
-        conv = tf.nn.conv2d(lrn2, kernel, [1, 1, 1, 1], padding='SAME')
-        biases = tf.Variable(net_data['conv3'][1], name='biases')
-        out = tf.nn.bias_add(conv, biases)
-        conv3 = tf.nn.relu(out, name=scope)
-        deep_param_img['conv3'] = [kernel, biases]
-        train_layers += [kernel, biases]
-
-    # Conv4
-    # Output 384, pad 1, kernel 3, group 2
-    with tf.name_scope('conv4') as scope:
-        kernel = tf.Variable(net_data['conv4'][0], name='weights')
-        group = 2
-
-        def convolve(i, k): return tf.nn.conv2d(
-            i, k, [1, 1, 1, 1], padding='SAME')
-        input_groups = tf.split(conv3, group, 3)
-        kernel_groups = tf.split(kernel, group, 3)
-        output_groups = [convolve(i, k)
-                         for i, k in zip(input_groups, kernel_groups)]
-        # Concatenate the groups
-        conv = tf.concat(output_groups, 3)
-        biases = tf.Variable(net_data['conv4'][1], name='biases')
-        out = tf.nn.bias_add(conv, biases)
-        conv4 = tf.nn.relu(out, name=scope)
-        deep_param_img['conv4'] = [kernel, biases]
-        train_layers += [kernel, biases]
-
-    # Conv5
-    # Output 256, pad 1, kernel 3, group 2
-    with tf.name_scope('conv5') as scope:
-        kernel = tf.Variable(net_data['conv5'][0], name='weights')
-        group = 2
-
-        def convolve(i, k): return tf.nn.conv2d(
-            i, k, [1, 1, 1, 1], padding='SAME')
-        input_groups = tf.split(conv4, group, 3)
-        kernel_groups = tf.split(kernel, group, 3)
-        output_groups = [convolve(i, k)
-                         for i, k in zip(input_groups, kernel_groups)]
-        # Concatenate the groups
-        conv = tf.concat(output_groups, 3)
-        biases = tf.Variable(net_data['conv5'][1], name='biases')
-        out = tf.nn.bias_add(conv, biases)
-
-        def val_fn1():
-
-            concated = tf.concat([tf.expand_dims(i, 0)
-                                  for i in tf.split(out, 10, 0)], 0)
-            return tf.reduce_mean(concated, 0)
-
-        conv5 = tf.cond(stage > 0, val_fn1, lambda: out)
-
-        conv5 = tf.nn.relu(conv5, name=scope)
-        conv5 = tf.reduce_max(tf.reshape(conv5, [tf.shape(conv5)[0], conv5.get_shape()[1]*conv5.get_shape()[2], conv5.get_shape()[3]]), 1)
-        deep_param_img['conv5'] = [kernel, biases]
-        train_last_layer += [kernel, biases]
-
-
-
-    # print("img model loading finished")
-    # Return outputs
-    return conv5, deep_param_img, train_layers, train_last_layer
 
 def txt_mlp_layers(txt, txt_dim, output_dim, stage, model_weights=None, with_tanh=True):
     deep_param_txt = {}

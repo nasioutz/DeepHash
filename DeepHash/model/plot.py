@@ -21,6 +21,10 @@ def set(value):
 def plot(name, value):
 		_since_last_flush[name][_iter[0]] = value
 
+def clear():
+	_since_beginning.clear()
+	_since_last_flush.clear()
+
 def flush(path = "",title=None):
 	prints = []
 

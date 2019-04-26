@@ -5,6 +5,7 @@ import argparse
 import warnings
 import DeepHash.model.dch as model
 import DeepHash.data_provider.image as dataset
+import DeepHash.model.plot as plot
 from os.path import join
 from time import localtime, sleep
 import tensorflow as tf
@@ -37,7 +38,7 @@ class Arguments:
                        retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
                        hash_layer='fc8', hamming_range=None, intermediate_pretrain_evaluations=[], intermediate_evaluations=[],
                        pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy', extract_hashlayer_features=False,
-                       reg_batch_targets=False):
+                       reg_batch_targets=False, recuring_training=1):
 
 
         self.dataset = dataset
@@ -113,6 +114,7 @@ class Arguments:
         self.save_dir = save_dir
         self.data_dir = data_dir
         self.save_evaluation_models = save_evaluation_models
+        self.recuring_training = recuring_training
 
         self.R = None
         self.label_dim = None
@@ -146,22 +148,69 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0',
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
                      pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      intermediate_pretrain_evaluations=[],
-                     pretrn_loss_type='negative_similarity', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
                      pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[200, 400, 600, 800, 1000, 1200],
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
+                     intermediate_evaluations=[400, 800, 1200, 1600, 2000, 2500, 3000],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=3000,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
                      gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
-                     reg_layer='fc8', regularizer='negative_similarity', regularization_factor=0.025,
+                     reg_layer='fc8', regularizer='negative_similarity', regularization_factor=0.0,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
-
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[400, 800, 1200, 1600, 2000, 2500, 3000],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=3000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     reg_layer='fc8', regularizer='average', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[400, 800, 1200, 1600, 2000, 2500, 3000],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=3000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     reg_layer='fc8', regularizer='average', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[400, 800, 1200, 1600, 2000, 2500, 3000],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=3000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     reg_layer='fc8', regularizer='average', regularization_factor=0.25,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
 
 
 
@@ -230,9 +279,34 @@ for args in argument_list:
 
     tf.reset_default_graph()
 
-    if args.training:
-        model_weights = model.train(train_img, args, database_img, query_img)
-        args.model_weights = model_weights
+    recuring_training_results = []
+
+    for i in range(args.recuring_training):
+
+        if args.training:
+            model_weights, training_results = model.train(train_img, args, database_img, query_img, train_iteration=i+1)
+            args.model_weights = model_weights
+        recuring_training_results = recuring_training_results + [training_results]
+        tf.reset_default_graph()
+
+    np.save(join(args.snapshot_folder, args.save_dir, "recuring_results.npy"), recuring_training_results)
+    recuring_training_results = np.array(recuring_training_results)
+    re_var = np.var(recuring_training_results[:, :, 0], 0)
+    re_avg = np.average(recuring_training_results[:, :, 0], 0)
+
+    plot.clear()
+
+    for map, var, i in zip(re_avg, re_var, range(len(re_avg))):
+        plot.set(args.intermediate_evaluations[i])
+        plot.plot('map_avg', map)
+        plot.plot('map_var', var)
+
+    result_save_dir = os.path.join(args.snapshot_folder, args.log_dir, "plots_final")
+    if os.path.exists(result_save_dir) is False:
+        os.makedirs(result_save_dir)
+    plot.flush(result_save_dir, "Bits: {}, LR: {}, Reg/er: {}, Reg. Fctr: {}, Reg Lyr {}, Batch Tgt: {}".format(
+        args.output_dim, args.lr, args.regularizer, args.regularization_factor,args.reg_layer, args.batch_targets))
+    plot.clear()
 
     if args.evaluate:
         maps = model.validation(database_img, query_img, args)
