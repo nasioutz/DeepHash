@@ -427,7 +427,7 @@ class DCH(object):
 
         img_dataset = Dataset(databases['img_train'], self.output_dim)
         self.training_results = []
-
+        plot.clear()
         ### tensorboard
         tflog_path = os.path.join(self.snapshot_folder, self.log_dir)
         if os.path.exists(tflog_path):
