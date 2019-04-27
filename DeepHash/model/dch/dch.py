@@ -20,6 +20,7 @@ import copy
 import examples.dch.target_extraction as t_extract
 
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
+feature_regulizers = ['negative_similarity']
 
 class DCH(object):
     def __init__(self, config):
@@ -65,15 +66,16 @@ class DCH(object):
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.pretrn_layer + ".npy"))
 
-        if (not self.extract_hashlayer_features) and self.regularizer == 'negative_similarity':
+        if (not self.extract_hashlayer_features) and self.regularizer in feature_regulizers:
             if self.reg_layer == 'fc8':
-                filename = self.reg_layer+"_" + str(self.output_dim)
+                self.targets_filename = self.reg_layer+"_" + str(self.output_dim)
             else:
-                filename = self.reg_layer
+                self.targets_filename = self.reg_layer
 
-            self.targets = np.load(
+            self.original_targets = np.load(
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
-                 self.dataset, filename + ".npy"))
+                 self.dataset, self.targets_filename + ".npy"))
+            self.targets = self.original_targets
 
         self.batch_target_op = self.batch_target_calculation()
 
@@ -212,7 +214,7 @@ class DCH(object):
 
     def euclidian_distance_loss(self, u, label_u, normed=False):
 
-        if self.extract_features:
+        if self.extract_features or self.extract_hashlayer_features:
 
             shape1 = label_u.shape[1].value
 
@@ -249,6 +251,8 @@ class DCH(object):
     def average_loss(self, u, label_u, normed=False):
 
         return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
+
+
 
     def negative_similarity_loss(self, u, label_u, normed=False):
 
@@ -290,14 +294,18 @@ class DCH(object):
         # loss function
         if self.pretrain or self.pretrain_evaluation or self.extract_features or self.extract_hashlayer_features:
 
-            self.pretrain_loss = self.loss_function[self.pretrn_loss_type](self.img_last_layer, self.img_label)
+            if self.pretrain or self.pretrain_evaluation or self.extract_features:
+                loss_type = self.pretrn_loss_type
+            elif self.extract_hashlayer_features:
+                loss_type = self.trn_loss_type
 
-            self.main_loss = self.pretrain_loss
+            self.main_loss = self.loss_function[loss_type](self.img_last_layer, self.img_label)
 
             learning_rate = self.pretrain_lr
+
             decay_step = self.pretrain_decay_step
 
-            tf.summary.scalar(self.pretrn_loss_type+" loss", self.pretrain_loss)
+            tf.summary.scalar(loss_type+" loss", self.main_loss)
         else:
             self.train_loss = self.loss_function[self.trn_loss_type](self.img_last_layer, self.img_label, gamma=self.gamma, normed=False)
             self.q_loss_img = tf.reduce_mean(tf.square(tf.subtract(tf.abs(self.img_last_layer), tf.constant(1.0))))
@@ -365,7 +373,7 @@ class DCH(object):
                (train_iter+1) % self.retargeting_step == 0 and\
                not (train_iter+1) == train_iter :
                 self.targets = self.feature_extraction(databases['img_database_pretrain'],
-                                                       retargeting=True, close_session=False, verbose=False)
+                                                       close_session=False, verbose=False)
 
 
             images, labels = img_dataset.next_batch(self.batch_size)
@@ -434,18 +442,33 @@ class DCH(object):
             pass
         #    shutil.rmtree(tflog_path)
         train_writer = tf.summary.FileWriter(tflog_path, self.sess.graph)
+
+
+
+
         t_range = trange(self.iter_num, desc="Starting Training",
                          mininterval=self.iter_num//4 if not verbose else 0.1, leave=True)
-
-
-
         for train_iter in t_range:
+
+            if not self.batch_targets and\
+               (train_iter+1) % self.reg_retargeting_step == 0 and\
+               not (train_iter+1) == train_iter:
+                extract_config = copy.deepcopy(self.config)
+                extract_config.model_weights = self.save_model(self.save_file.split(".")[0] + "_train_intermediate." + self.save_file.split(".")[1])
+                extract_config.pretrain = False
+                extract_config.pretrain_evaluation = False
+                extract_config.training = False
+                extract_config.evaluate = False
+                extract_config.extract_features = False
+                extract_config.extract_hashlayer_features = True
+                extract_config.hash_layer = self.reg_layer
+                extract_config.output_dim = self.output_dim if self.reg_layer == 'fc8' else layer_output_dim[self.reg_layer]
+                extract_model = DCH(extract_config)
+                self.targets = extract_model.hashlayer_feature_extraction(databases, extract_config)
             images, labels = img_dataset.next_batch(self.batch_size)
 
-            #self.regularization_layer = tf.print(self.regularization_layer, [self.regularization_layer], message='Regularization Layer: ')
-            #self.img_last_layer = tf.print(self.img_last_layer, [self.img_last_layer], message='Last Layer: ')
+            if self.regularizer in feature_regulizers and self.regularization_factor > 0 and self.reg_batch_targets:
 
-            if self.regularizer == 'negative_similariry' and self.regularization_factor > 0 and self.reg_batch_targets:
                 self.targets = self.sess.run(
                         self.batch_target_op,
                         feed_dict={self.img: images, self.img_label: labels}
@@ -473,9 +496,8 @@ class DCH(object):
 
             if train_iter in self.intermediate_evaluations:
                 tf.reset_default_graph()
-                model_weights = self.save_model(self.save_file.split(".")[0] + "_pretrain_intermediate." + self.save_file.split(".")[1])
                 inter_config = copy.deepcopy(self.config)
-                inter_config.model_weights = model_weights
+                inter_config.model_weights = self.save_model(self.save_file.split(".")[0] + "_train_intermediate." + self.save_file.split(".")[1])
                 inter_config.pretrain = False
                 inter_config.pretrain_evaluation = False
                 inter_config.training = False
@@ -551,7 +573,7 @@ class DCH(object):
 
             output, loss = self.sess.run(
 
-                                        [self.img_last_layer, self.pretrain_loss],
+                                        [self.img_last_layer, self.loss],
                                         feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
                                         )
 
@@ -612,44 +634,6 @@ class DCH(object):
         eval_sess.close()
 
         return {'mAP for k={} first'.format(self.pretrain_top_k): meanAP[0]}
-
-    def feature_extraction(self, img_database, close_session=True, verbose=True):
-
-        if os.path.exists(self.save_dir) is False:
-            os.makedirs(self.save_dir)
-
-        database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
-        img_database.finish_epoch()
-
-        d_range = trange(database_batch, desc="Starting Database Evaluation",
-                         mininterval=database_batch//4 if not verbose else 0.1, leave=False)
-
-        for i in d_range:
-            images, labels = img_database.next_batch(self.val_batch_size)
-
-            output, loss = self.sess.run(
-
-                [self.img_last_layer, self.pretrain_loss],
-                feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
-            )
-
-            img_database.feed_batch_output(self.val_batch_size, output)
-
-            d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
-            d_range.refresh()
-
-        if self.save_evaluation_models:
-            with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
-                pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
-
-        if close_session:
-            self.sess.close()
-
-        database_output = img_database.output
-        database_labels = img_database.label
-
-        return t_extract.target_extraction(database_labels, database_output)
-
 
     def validation(self, databases, R=100,verbose=True):
 
@@ -750,3 +734,80 @@ class DCH(object):
             'i2i_map_radius_2': mmap,
         }
 
+    def feature_extraction(self, img_database, close_session=True, verbose=False):
+
+        if os.path.exists(self.save_dir) is False:
+            os.makedirs(self.save_dir)
+
+        database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
+        img_database.finish_epoch()
+
+        d_range = trange(database_batch, desc="Starting Database Evaluation",
+                         mininterval=database_batch // 4 if not verbose else 0.1, leave=False)
+
+        for i in d_range:
+            images, labels = img_database.next_batch(self.val_batch_size)
+
+            output, loss = self.sess.run(
+
+                [self.img_last_layer, self.pretrain_loss],
+                feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+            )
+
+            img_database.feed_batch_output(self.val_batch_size, output)
+
+            if verbose:
+                d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+                d_range.refresh()
+
+        if self.save_evaluation_models:
+            with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
+                pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
+
+        if close_session:
+            self.sess.close()
+
+        database_output = img_database.output
+        database_labels = img_database.label
+
+        return t_extract.target_extraction(database_labels, database_output)
+
+    def hashlayer_feature_extraction(self, databases, close_session=True, verbose=False):
+
+        if os.path.exists(self.save_dir) is False:
+            os.makedirs(self.save_dir)
+
+        img_database = Dataset(databases['img_database'], self.output_dim)
+
+        database_batch = int(ceil(img_database.n_samples / float(self.val_batch_size)))
+        img_database.finish_epoch()
+
+        d_range = trange(database_batch, desc="Starting Database Evaluation",
+                         mininterval=database_batch // 4 if not verbose else 0.1, leave=False)
+
+        for i in d_range:
+            images, labels = img_database.next_batch(self.val_batch_size)
+
+            output, loss = self.sess.run(
+
+                [self.img_last_layer, self.loss],
+                feed_dict={self.img: images, self.img_label: labels, self.stage: 1}
+            )
+
+            img_database.feed_batch_output(self.val_batch_size, output)
+
+            if verbose:
+                d_range.set_description('Evaluating Database | Cosine Loss: %s' % loss)
+                d_range.refresh()
+
+        if self.save_evaluation_models:
+            with open(join(self.save_dir, 'img_database.pkl'), 'wb') as output:
+                pickle.dump(img_database, output, pickle.HIGHEST_PROTOCOL)
+
+        if close_session:
+            self.sess.close()
+
+        database_output = img_database.output
+        database_labels = img_database.label
+
+        return t_extract.target_extraction(database_labels, database_output)

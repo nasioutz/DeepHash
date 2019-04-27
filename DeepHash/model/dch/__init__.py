@@ -43,7 +43,7 @@ def feature_extraction(database_img, config):
 
 def hashlayer_feature_extraction(database_img, config):
 
+    databases = {'img_database': database_img}
     model = DCH(config)
-    img_database = Dataset(database_img, config.output_dim)
-    return model.feature_extraction(img_database)
+    return model.hashlayer_feature_extraction(databases)
 
