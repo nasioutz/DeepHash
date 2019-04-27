@@ -450,8 +450,9 @@ class DCH(object):
                          mininterval=self.iter_num//4 if not verbose else 0.1, leave=True)
         for train_iter in t_range:
 
-            if not self.batch_targets and\
+            if not self.reg_batch_targets and\
                (train_iter+1) % self.reg_retargeting_step == 0 and\
+               self.regularization_factor > 0 and\
                not (train_iter+1) == train_iter:
                 extract_config = copy.deepcopy(self.config)
                 extract_config.model_weights = self.save_model(self.save_file.split(".")[0] + "_train_intermediate." + self.save_file.split(".")[1])
@@ -465,6 +466,7 @@ class DCH(object):
                 extract_config.output_dim = self.output_dim if self.reg_layer == 'fc8' else layer_output_dim[self.reg_layer]
                 extract_model = DCH(extract_config)
                 self.targets = extract_model.hashlayer_feature_extraction(databases, extract_config)
+                
             images, labels = img_dataset.next_batch(self.batch_size)
 
             if self.regularizer in feature_regulizers and self.regularization_factor > 0 and self.reg_batch_targets:
