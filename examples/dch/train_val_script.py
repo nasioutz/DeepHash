@@ -149,19 +149,98 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=1,
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
                      pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      intermediate_pretrain_evaluations=[],
                      pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
                      pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=False, extract_hashlayer_features=False,
-                     finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[800, 1600, 2000],
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
-                     gamma=35, q_lambda=0.055, hash_layer='fc8', reg_retargeting_step=400, reg_batch_targets=False,
-                     reg_layer='fc8', regularizer='knn', regularization_factor=0.005,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     reg_layer='fc8', regularizer='average', regularization_factor=0.0,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='average', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='negative_similarity', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='euclidean_distance', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='knn', regularization_factor=0.025,
+                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+                     #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
+                     ))
+argument_list.append(Arguments(
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     pretrain=False, pretrain_evaluation=False, extract_features=False,
+                     finetune_all_pretrain=True, pretrain_top_k=100,
+                     intermediate_pretrain_evaluations=[],
+                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=False, pretrain_iter_num=2000,
+                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='negative_knn', regularization_factor=0.025,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
@@ -257,8 +336,10 @@ for args in argument_list:
     result_save_dir = os.path.join(args.snapshot_folder, args.log_dir, "plots_final")
     if os.path.exists(result_save_dir) is False:
         os.makedirs(result_save_dir)
-    plot.flush(result_save_dir, "Bit:{}, LR:{}, Reg:{}, Reg.Fctr:{}, RegLr{}, BtchTgt:{}".format(
-        args.output_dim, args.lr, args.regularizer, args.regularization_factor,args.reg_layer, args.batch_targets))
+    plot.flush(result_save_dir, "Dataset:{}, OutputDim:{}, LR:{}, DecayStep:{}"
+                                "\nReg:{}, Reg.Fctr:{}, RegLr{}, BtchTgt:{}, RegRetarStep:{}".format(
+        args.dataset, args.output_dim, args.lr, args.decay_step,
+        args.regularizer, args.regularization_factor,args.reg_layer, args.reg_batch_targets, args.reg_retargeting_step))
     plot.clear()
 
     if args.evaluate:
