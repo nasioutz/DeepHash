@@ -20,7 +20,7 @@ import copy
 import examples.dch.target_extraction as t_extract
 
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
-feature_regulizers = ['negative_similarity']
+feature_regulizers = ['negative_similarity', 'euclidean_distance']
 
 class DCH(object):
     def __init__(self, config):
@@ -82,7 +82,9 @@ class DCH(object):
         self.loss_function = {'euclidean_distance': self.euclidian_distance_loss,
                               'cauchy': self.cauchy_cross_entropy_loss,
                               'average': self.average_loss,
-                              'negative_similarity': self.negative_similarity_loss}
+                              'negative_similarity': self.negative_similarity_loss,
+                              'knn': self.knn_loss,
+                              'negative_knn': self.negative_knn_loss}
 
         self.train_op = self.apply_loss_function(self.global_step)
 
@@ -247,12 +249,33 @@ class DCH(object):
         loss = tf.reduce_mean(per_img_avg)
         return loss
 
-
     def average_loss(self, u, label_u, normed=False):
 
         return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
 
+    def knn_loss(self,u, label_u, normed=False, similarity=True, k=64):
 
+        distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+        val, ind = tf.math.top_k(-distances, k=k, sorted=True)
+
+        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, ind), 1), u), axis=1))
+
+        if similarity:
+            loss = tf.exp(loss)
+
+        return loss
+
+    def negative_knn_loss(self,u, label_u, normed=False, similarity=True, k=64):
+
+        distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+        val, ind = tf.math.top_k(-distances, k=k, sorted=True)
+
+        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, ind), 1), u), axis=1))
+
+        if similarity:
+            loss = tf.exp(-loss)
+
+        return loss
 
     def negative_similarity_loss(self, u, label_u, normed=False):
 
@@ -288,7 +311,9 @@ class DCH(object):
 
         per_img_negative_distance = tf.exp(tf.cast(tf.negative(per_img_avg),dtype=tf.float32))
 
-        return tf.reduce_mean(per_img_negative_distance)
+        loss = tf.reduce_mean(per_img_negative_distance)
+
+        return loss
 
     def apply_loss_function(self, global_step):
         # loss function
@@ -451,8 +476,9 @@ class DCH(object):
         for train_iter in t_range:
 
             if not self.reg_batch_targets and\
-               (train_iter+1) % self.reg_retargeting_step == 0 and\
                self.regularization_factor > 0 and\
+               self.regularizer in feature_regulizers and\
+               (train_iter+1) % self.reg_retargeting_step == 0 and\
                not (train_iter+1) == train_iter:
                 extract_config = copy.deepcopy(self.config)
                 extract_config.model_weights = self.save_model(self.save_file.split(".")[0] + "_train_intermediate." + self.save_file.split(".")[1])
@@ -466,7 +492,7 @@ class DCH(object):
                 extract_config.output_dim = self.output_dim if self.reg_layer == 'fc8' else layer_output_dim[self.reg_layer]
                 extract_model = DCH(extract_config)
                 self.targets = extract_model.hashlayer_feature_extraction(databases, extract_config)
-                
+
             images, labels = img_dataset.next_batch(self.batch_size)
 
             if self.regularizer in feature_regulizers and self.regularization_factor > 0 and self.reg_batch_targets:

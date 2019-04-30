@@ -157,11 +157,11 @@ argument_list.append(Arguments(
                      pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=False, extract_hashlayer_features=False,
                      finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[200, 800, 1200, 1600, 2000],
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=3000,
-                     trn_loss_type='cauchy', lr=0.0065, decay_step=2000, decay_factor=0.5,
+                     intermediate_evaluations=[800, 1600, 2000],
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=2000,
+                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.5,
                      gamma=35, q_lambda=0.055, hash_layer='fc8', reg_retargeting_step=400, reg_batch_targets=False,
-                     reg_layer='fc8', regularizer='negative_similarity', regularization_factor=0.025,
+                     reg_layer='fc8', regularizer='knn', regularization_factor=0.005,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_3_19_16_45_20", 'models', 'model_weights_pretrain.npy')
                      ))
