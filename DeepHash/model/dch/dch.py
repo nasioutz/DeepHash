@@ -77,6 +77,18 @@ class DCH(object):
                  self.dataset, self.targets_filename + ".npy"))
             self.targets = self.original_targets
 
+        if "knn" in self.regularizer:
+            if "negative_knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[2])
+                self.regularizer = self.regularizer.split("_")[0]+"_"+self.regularizer.split("_")[1]
+            if "knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[1])
+                self.regularizer = self.regularizer.split("_")[0]
+            else:
+                print("WARNING: KNN k not set. Setting default value of 20")
+        else:
+            self.knn_k = None
+
         self.batch_target_op = self.batch_target_calculation()
 
         self.loss_function = {'euclidean_distance': self.euclidian_distance_loss,
@@ -253,7 +265,10 @@ class DCH(object):
 
         return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
 
-    def knn_loss(self,u, label_u, normed=False, similarity=True, k=64):
+    def knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
+
+        if self.knn_k is not None:
+            k = self.knn_k
 
         distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
         val, ind = tf.math.top_k(-distances, k=k, sorted=True)
@@ -543,8 +558,11 @@ class DCH(object):
                 if os.path.exists(result_save_dir) is False:
                     os.makedirs(result_save_dir)
 
-                plot.flush(result_save_dir, "Bits: {}, LR: {}, Regularizer: {}, Reg. Factor: {}".format(
-                    self.output_dim, self.lr, self.regularizer, self.regularization_factor))
+                plot.flush(result_save_dir, "Dataset:{}, OutputDim:{}, LR:{}, DecayStep:{}"
+                                            "\nReg:{}, Reg.Fctr:{}, RegLr{}, BtchTgt:{}, RegRetarStep:{}".format(
+                    self.dataset, self.output_dim, self.lr, self.decay_step,
+                    self.regularizer, self.regularization_factor, self.reg_layer, self.reg_batch_targets,
+                    self.reg_retargeting_step))
 
 
 
