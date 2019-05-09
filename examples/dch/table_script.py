@@ -2,7 +2,7 @@ import numpy as np
 from os.path import join
 import csv
 
-snapshots = {'2019_5_8_17_41_30': 'nonclass_knn_20 (focused)'}
+snapshots = {'2019_5_4_13_18_23': 'Negative_KNN, k=20 (focused)'}
 
 for snapshot, title in snapshots.items():
 
