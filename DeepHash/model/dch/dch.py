@@ -81,7 +81,10 @@ class DCH(object):
             if "negative_knn_" in self.regularizer:
                 self.knn_k = int(self.regularizer.split("_")[2])
                 self.regularizer = self.regularizer.split("_")[0]+"_"+self.regularizer.split("_")[1]
-            if "knn_" in self.regularizer:
+            elif "nonclass_knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[2])
+                self.regularizer = self.regularizer.split("_")[0]+"_"+self.regularizer.split("_")[1]
+            elif "knn_" in self.regularizer:
                 self.knn_k = int(self.regularizer.split("_")[1])
                 self.regularizer = self.regularizer.split("_")[0]
             else:
@@ -96,7 +99,8 @@ class DCH(object):
                               'average': self.average_loss,
                               'negative_similarity': self.negative_similarity_loss,
                               'knn': self.knn_loss,
-                              'negative_knn': self.negative_knn_loss}
+                              'negative_knn': self.negative_knn_loss,
+                              'nonclass_knn': self.nonclass_knn_loss}
 
         self.train_op = self.apply_loss_function(self.global_step)
 
@@ -156,15 +160,21 @@ class DCH(object):
 
         targets = tf.constant(0.0, shape=[0, u.shape[1]])
 
-        for i in range(0, shape1):
+        iters = shape1
+
+        def condition(targets, i):
+            return tf.less(i, iters)
+
+        def body(targets, i):
             targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
-                tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
+                tf.reshape(tf.gather(u, tf.where(tf.equal(tf.gather(label_u, i, axis=1), 1))),
                            [-1, u.shape[1]]), 0), [1, -1]))], 0)
+            return [targets, tf.add(i, 1)]
+
+        targets, i = tf.while_loop(condition, body, [targets, 0],
+                                   shape_invariants=[tf.TensorShape([None, None]), tf.TensorShape([])])
 
         corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
-        # corrected_targets = tf.where(tf.is_nan(targets), tf.cast(self.targets, tf.float32), targets)
-
-        #corrected_targets = tf.stop_gradient(corrected_targets)
 
         return corrected_targets
 
@@ -280,7 +290,8 @@ class DCH(object):
 
         return loss
 
-    def negative_knn_loss(self,u, label_u, normed=False, similarity=True, k=64):
+
+    def negative_knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
 
         distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
         val, ind = tf.math.top_k(-distances, k=k, sorted=True)
@@ -289,6 +300,36 @@ class DCH(object):
 
         if similarity:
             loss = tf.exp(-loss)
+
+        return loss
+
+    def nonclass_knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
+
+        if self.knn_k is not None:
+            k = self.knn_k
+
+        indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
+        iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
+
+        def condition(indices, i):
+            return tf.less(i, iters)
+
+        def body(indices, i):
+            distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+            b1_nt = tf.where(tf.not_equal(tf.gather(label_u, i, axis=0), 1))
+            corrected_distances_b1 = tf.where(
+                tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1)),
+                tf.gather(distances, i, axis=0), tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
+            val, ind = tf.math.top_k(-corrected_distances_b1, k=k, sorted=True)
+            return [tf.concat([indices, tf.reshape(ind, shape=[1, -1])], 0), tf.add(i, 1)]
+
+        indices, i = tf.while_loop(condition, body, [indices, 0],
+                                   shape_invariants=[tf.TensorShape([None, None]), tf.TensorShape([])])
+
+        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, indices), 1), u), axis=1))
+
+        if similarity:
+            loss = tf.exp(loss)
 
         return loss
 
