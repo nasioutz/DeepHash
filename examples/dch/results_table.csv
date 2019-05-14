@@ -4,13 +4,13 @@ Baseline (focused),0.804713371,0.002822853
 Batch Center - Average,0.820970702,0.002638776
 Batch Center - Average (focused),0.814952584,0.002299487
 Negative Similarity,0.807466202,0.006240644
+Negative_Similarity (focused),0.810603934,0.004704302
 Distance from Class (Euclidean Distance),0.808759306,0.004685002
 "KNN, k=20, reg.factor=25e-05",0.810607711,0.001909622
+"KNN, k=20, reg.factor=25e-05 (focused)",0.809376053,0.002096902
 "Negative_KNN, k=20",0.812311067,0.003119797
 "Negative_KNN (cont.), k=20",0.814714392,0.003726063
 "Negative_KNN, k=20 (focused)",0.817682033,0.002839302
 nonclass_knn_20,0.815271788,0.004552404
 nonclass_knn_20 (focused),0.810531772,0.00136421
-Negative_Similarity,0.8106039343225895,0.0047043018171709595
-Negative_Similarity (focused),0.8106039343225895,0.0047043018171709595
-"KNN, k=20, reg.factor=25e-05 (focused)",0.8093760526220354,0.0020969019456338407
+Distance from Class - Euclidean Distance (Focused),0.815436618773383,0.0019432391969714954
