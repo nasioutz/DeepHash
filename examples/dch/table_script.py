@@ -2,7 +2,7 @@ import numpy as np
 from os.path import join
 import csv
 
-snapshots = {'2019_5_9_12_57_33': 'Distance from Class - Euclidean Distance (Focused)'}
+snapshots = {'2019_5_18_21_25_23': 'Negative Similarity | 32-Bit'}
 
 for snapshot, title in snapshots.items():
 
