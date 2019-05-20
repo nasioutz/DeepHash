@@ -18,3 +18,6 @@ Negative_KNN  k=20 | 64-Bit | Extended,0.815436619,0.001943239
 "Negative_KNN, k=20  | 64-Bit | Focused",0.814383645,0.002593149
 nonclass_knn_20 | 64-Bit,0.806023854,0.003373656
 nonclass_knn_20 | 64-Bit | Focused,0.807109373,0.003018035
+Batch Center - Average | 48-Bit | Focused,0.8136510820350319,0.002948065611322238
+Negative Similarity | 48-Bit | Focused,0.8134930942748589,0.0024573687895810318
+Negative Similarity | 32-Bit | Focused,0.8090010063419504,0.0035446403697081403
