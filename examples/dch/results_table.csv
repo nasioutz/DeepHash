@@ -8,6 +8,7 @@ Batch Center - Average | 32-Bit,0.810603934,0.004704302
 Negative Similarity | 64-Bit,0.808759306,0.004685002
 Negative Similarity | 64-Bit | Focused,0.810607711,0.001909622
 Negative Similarity | 48-Bit,0.809376053,0.002096902
+Negative Similarity | 48-Bit | Focused,0.813493094,0.002457369
 Negative Similarity | 32-Bit,0.812311067,0.003119797
 Distance from Class - Euclidean Distance | 64-Bit,0.814714392,0.003726063
 Distance from Class - Euclidean Distance | 64-Bit | Focused,0.808865342,0.003140315
@@ -18,6 +19,3 @@ Negative_KNN  k=20 | 64-Bit | Extended,0.815436619,0.001943239
 "Negative_KNN, k=20  | 64-Bit | Focused",0.814383645,0.002593149
 nonclass_knn_20 | 64-Bit,0.806023854,0.003373656
 nonclass_knn_20 | 64-Bit | Focused,0.807109373,0.003018035
-Batch Center - Average | 48-Bit | Focused,0.8136510820350319,0.002948065611322238
-Negative Similarity | 48-Bit | Focused,0.8134930942748589,0.0024573687895810318
-Negative Similarity | 32-Bit | Focused,0.8090010063419504,0.0035446403697081403
