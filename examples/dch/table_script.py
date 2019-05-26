@@ -2,7 +2,7 @@ import numpy as np
 from os.path import join
 import csv
 
-snapshots = {'2019_5_18_21_25_23': 'Negative Similarity | 32-Bit'}
+snapshots = {'2019_5_21_13_3_18': 'Baseline | 32-Bit | Focused'}
 
 for snapshot, title in snapshots.items():
 
