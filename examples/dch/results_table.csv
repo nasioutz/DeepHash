@@ -1,15 +1,22 @@
 Regularizer,Mean,Standard Deviation
 Baseline | 64-Bit,0.804603058,0.002316439
 Baseline | 64-Bit | Focused,0.804713371,0.002822853
+Baseline | 48-Bit,0.809695929,0.003057363
+Baseline | 48-Bit | Focused,0.812835027,0.003654103
+Baseline | 32-Bit,0.797428662,0.003258349
+Baseline | 32-Bit | Focused,0.811578734,0.003273771
 Batch Center - Average | 64-Bit,0.820970702,0.002638776
 Batch Center - Average | 64-Bit | Focused,0.814952584,0.002299487
 Batch Center - Average | 48-Bit,0.807466202,0.006240644
+Batch Center - Average | 48-Bit | Focused,0.813651082,0.002948066
 Batch Center - Average | 32-Bit,0.810603934,0.004704302
+Batch Center - Average | 32-Bit | Focused,0.809141534,0.002301008
 Negative Similarity | 64-Bit,0.808759306,0.004685002
 Negative Similarity | 64-Bit | Focused,0.810607711,0.001909622
 Negative Similarity | 48-Bit,0.809376053,0.002096902
 Negative Similarity | 48-Bit | Focused,0.813493094,0.002457369
 Negative Similarity | 32-Bit,0.812311067,0.003119797
+Negative Similarity | 32-Bit | Focused,0.809344116,0.004332862
 Distance from Class - Euclidean Distance | 64-Bit,0.814714392,0.003726063
 Distance from Class - Euclidean Distance | 64-Bit | Focused,0.808865342,0.003140315
 "KNN, k=20, reg.factor=25e-05 | 64-Bit",0.817682033,0.002839302
@@ -19,9 +26,7 @@ Negative_KNN  k=20 | 64-Bit | Extended,0.815436619,0.001943239
 "Negative_KNN, k=20  | 64-Bit | Focused",0.814383645,0.002593149
 nonclass_knn_20 | 64-Bit,0.806023854,0.003373656
 nonclass_knn_20 | 64-Bit | Focused,0.807109373,0.003018035
-Baseline | 48-Bit,0.809695928705281,0.003057362577086431
-Baseline | 48-Bit | Focused,0.8128350273782011,0.003654102609252395
-Baseline | 32-Bit,0.7974286622963831,0.003258348563192435
-Baseline | 32-Bit | Focused,0.811578734086902,0.0032737710160729992
-Batch Center - Average | 48-Bit | Focused,0.8136510820350319,0.002948065611322238Negative Similarity | 32-Bit | Focused,0.8093441155601493,0.004332861622455205
-Batch Center - Average | 32-Bit | Focused,0.8091415343893091,0.002301007934866849
+Baseline | 48-Bit,0.809695929,0.003057363
+Baseline | 48-Bit | Focused,0.812835027,0.003654103
+Baseline | 32-Bit,0.797428662,0.003258349
+Baseline | 32-Bit | Focused,0.811578734,0.003273771
