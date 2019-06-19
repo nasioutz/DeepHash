@@ -77,6 +77,7 @@ class DCH(object):
                  self.dataset, self.targets_filename + ".npy"))
             self.targets = self.original_targets
 
+
         if "knn" in self.regularizer:
             if "negative_nonclass_knn" in self.regularizer:
                 self.knn_k = int(self.regularizer.split("_")[3])
@@ -95,16 +96,30 @@ class DCH(object):
         else:
             self.knn_k = None
 
+        if "reduce" in self.regularizer:
+            self.loss_direction='reduce'
+            self.regularizer = self.regularizer.replace("reduce_",'')
+        elif "increase" in self.regularizer:
+            self.loss_direction='increase'
+            self.regularizer = self.regularizer.replace("increase_",'')
+
+        if "distance" in self.regularizer:
+            self.loss_scale='distance'
+            self.regularizer = self.regularizer.replace("_distance",'')
+        elif "similarity" in self.regularizer:
+            self.loss_scale='similarity'
+            self.regularizer = self.regularizer.replace("_similarity",'')
+
+
+
+
         self.batch_target_op = self.batch_target_calculation()
 
-        self.loss_function = {'euclidean_distance': self.euclidian_distance_loss,
-                              'cauchy': self.cauchy_cross_entropy_loss,
-                              'average': self.average_loss,
-                              'negative_similarity': self.negative_similarity_loss,
+        self.loss_function = {'cauchy': self.cauchy_cross_entropy_loss,
+                              'class_center': self.class_center_loss,
+                              'batch_center': self.batch_center_loss,
                               'knn': self.knn_loss,
-                              'negative_knn': self.negative_knn_loss,
-                              'nonclass_knn': self.nonclass_knn_loss,
-                              'negative_nonclass_knn': self.negative_nonclass_knn_loss}
+                              'nonclass_knn': self.nonclass_knn_loss}
 
         self.train_op = self.apply_loss_function(self.global_step)
 
@@ -240,7 +255,7 @@ class DCH(object):
         return tf.reduce_mean(tf.multiply(all_loss, balance_p_mask))
 
 
-    def euclidian_distance_loss(self, u, label_u, normed=False):
+    def class_center_loss(self, u, label_u, normed=False):
 
         if self.extract_features or self.extract_hashlayer_features:
 
@@ -272,136 +287,107 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, mean)
 
-        loss = tf.reduce_mean(per_img_avg)
-        return loss
-
-    def average_loss(self, u, label_u, normed=False):
-
-        return tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(u, 0), u), axis=1))
-
-    def knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
-
-        if self.knn_k is not None:
-            k = self.knn_k
-
-        distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
-        val, ind = tf.math.top_k(-distances, k=k, sorted=True)
-
-        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, ind), 1), u), axis=1))
-
-        if similarity:
-            loss = tf.exp(loss)
-
-        return loss
-
-
-    def negative_knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
-
-        distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
-        val, ind = tf.math.top_k(-distances, k=k, sorted=True)
-
-        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, ind), 1), u), axis=1))
-
-        if similarity:
-            loss = tf.exp(-loss)
-
-        return loss
-
-    def nonclass_knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
-
-        if self.knn_k is not None:
-            k = self.knn_k
-
-        indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
-        iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
-
-        def condition(indices, i):
-            return tf.less(i, iters)
-
-        def body(indices, i):
-            distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
-            b1_nt = tf.where(tf.not_equal(tf.gather(label_u, i, axis=0), 1))
-            corrected_distances_b1 = tf.where(
-                tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1)),
-                tf.gather(distances, i, axis=0), tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
-            val, ind = tf.math.top_k(-corrected_distances_b1, k=k, sorted=True)
-            return [tf.concat([indices, tf.reshape(ind, shape=[1, -1])], 0), tf.add(i, 1)]
-
-        indices, i = tf.while_loop(condition, body, [indices, 0],
-                                   shape_invariants=[tf.TensorShape([None, None]), tf.TensorShape([])])
-
-        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, indices), 1), u), axis=1))
-
-        if similarity:
-            loss = tf.exp(loss)
-
-        return loss
-
-    def negative_nonclass_knn_loss(self,u, label_u, normed=False, similarity=True, k=20):
-
-        if self.knn_k is not None:
-            k = self.knn_k
-
-        indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
-        iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
-
-        def condition(indices, i):
-            return tf.less(i, iters)
-
-        def body(indices, i):
-            distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
-            b1_nt = tf.where(tf.not_equal(tf.gather(label_u, i, axis=0), 1))
-            corrected_distances_b1 = tf.where(
-                tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1)),
-                tf.gather(distances, i, axis=0), tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
-            val, ind = tf.math.top_k(-corrected_distances_b1, k=k, sorted=True)
-            return [tf.concat([indices, tf.reshape(ind, shape=[1, -1])], 0), tf.add(i, 1)]
-
-        indices, i = tf.while_loop(condition, body, [indices, 0],
-                                   shape_invariants=[tf.TensorShape([None, None]), tf.TensorShape([])])
-
-        loss = tf.reduce_mean(tf.norm(tf.math.subtract(tf.reduce_mean(tf.gather(u, indices), 1), u), axis=1))
-
-        if similarity:
-            loss = tf.exp(-loss)
-
-        return loss
-
-    def negative_similarity_loss(self, u, label_u, normed=False):
-
-        if self.extract_features or self.extract_hashlayer_features:
-
-            shape1 = label_u.shape[1].value
-
-            targets = tf.constant(0.0, shape=[0, u.shape[1]])
-
-            for i in range(0, shape1):
-                targets = tf.concat([targets, tf.stop_gradient(tf.reshape(tf.reduce_mean(
-                    tf.reshape(tf.gather(u, tf.where(tf.equal(label_u[:, i], 1))),
-                               [-1, u.shape[1]]), 0), [1, -1]))], 0)
-
-            corrected_targets = tf.where(tf.is_nan(targets), tf.zeros_like(targets), targets)
-
-            targets = tf.stop_gradient(corrected_targets)
-
+        if self.loss_scale=='similarity':
+            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
         else:
-            targets = self.targets
+            per_img_avg_in_scale = per_img_avg
 
-        mean = tf.divide(
-            tf.reduce_sum(
-                tf.multiply(
-                    tf.cast(
-                        tf.multiply(tf.expand_dims(label_u, 2), np.ones((1, 1, np.int(u.shape[1])))), dtype=tf.float32),
-                    targets), 1), tf.reshape(tf.cast(tf.reduce_sum(label_u, 1), dtype=tf.float32), (-1, 1)))
+        loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
+
+        if self.loss_direction=='increase':
+            loss = tf.negative(loss_before_direction)
+        else:
+            loss = loss_before_direction
+
+        return loss
+
+    def batch_center_loss(self, u, label_u, normed=False):
 
         if normed:
-            per_img_avg = tfdist.normed_euclidean2(u, mean)
+            per_img_avg = tfdist.normed_euclidean2(u, tf.reduce_mean(u, 0))
         else:
-            per_img_avg = tfdist.euclidean(u, mean)
+            per_img_avg = tfdist.euclidean(u, tf.reduce_mean(u, 0))
 
-        per_img_negative_distance = tf.exp(tf.cast(tf.negative(per_img_avg),dtype=tf.float32))
+        if self.loss_scale == 'similarity':
+            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
+        else:
+            per_img_avg_in_scale = per_img_avg
 
-        loss = tf.reduce_mean(per_img_negative_distance)
+        loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
+
+        if self.loss_direction == 'increase':
+            loss = tf.negative(loss_before_direction)
+        else:
+            loss = loss_before_direction
+
+        return loss
+
+    def knn_loss(self, u, label_u, k=20, normed=False):
+
+        if self.knn_k is not None:
+            k = self.knn_k
+
+        distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+        values, indices = tf.math.top_k(-distances, k=k, sorted=True)
+
+        if normed:
+            per_img_avg = tfdist.normed_euclidean2(u, tf.reduce_mean(tf.gather(u, indices), 1))
+        else:
+            per_img_avg = tfdist.euclidean(u, tf.reduce_mean(tf.gather(u, indices), 1))
+
+        if self.loss_scale == 'similarity':
+            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
+        else:
+            per_img_avg_in_scale = per_img_avg
+
+        loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
+
+        if self.loss_direction == 'increase':
+            loss = tf.negative(loss_before_direction)
+        else:
+            loss = loss_before_direction
+
+        return loss
+
+    def nonclass_knn_loss(self,u, label_u, k=20, normed=False):
+
+        if self.knn_k is not None:
+            k = self.knn_k
+
+        indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
+        iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
+
+        def condition(indices, i):
+            return tf.less(i, iters)
+
+        def body(indices, i):
+            distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+            b1_nt = tf.where(tf.not_equal(tf.gather(label_u, i, axis=0), 1))
+            corrected_distances_b1 = tf.where(
+                tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1)),
+                tf.gather(distances, i, axis=0), tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
+            val, ind = tf.math.top_k(-corrected_distances_b1, k=k, sorted=True)
+            return [tf.concat([indices, tf.reshape(ind, shape=[1, -1])], 0), tf.add(i, 1)]
+
+        indices, i = tf.while_loop(condition, body, [indices, 0],
+                                   shape_invariants=[tf.TensorShape([None, None]), tf.TensorShape([])])
+
+        if normed:
+            per_img_avg = tfdist.normed_euclidean2(u, tf.reduce_mean(tf.gather(u, indices), 1))
+        else:
+            per_img_avg = tfdist.euclidean(u, tf.reduce_mean(tf.gather(u, indices), 1))
+
+        if self.loss_scale == 'similarity':
+            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
+        else:
+            per_img_avg_in_scale = per_img_avg
+
+        loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
+
+        if self.loss_direction == 'increase':
+            loss = tf.negative(loss_before_direction)
+        else:
+            loss = loss_before_direction
 
         return loss
 

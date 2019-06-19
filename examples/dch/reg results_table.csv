@@ -1,0 +1,6 @@
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 0.01,0.8092231705575197,0.005919484009926396
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 0.05,0.8119027957225526,0.003249084585498222
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 0.1,0.8056870699511709,0.00369077376545456
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 0.5,0.7999226589109605,0.0028179088830649966
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 2.5,0.8080409111668443,0.0029736115652860425cifar10 | Negative Similarity | 32-Bit | RegFactor: 1.0,0.8073478003135243,0.0021987961491552583
+cifar10 | Negative Similarity | 32-Bit | RegFactor: 2.0,0.8117035666110823,0.004317732412909478

@@ -2,7 +2,7 @@ import numpy as np
 from os.path import join
 import csv
 
-snapshots = {'2019_5_21_13_3_18': 'Baseline | 32-Bit | Focused'}
+snapshots = {'2019_6_9_12_33_4': 'cifar10 | Negative Similarity | 32-Bit | RegFactor: 2.0'}
 
 for snapshot, title in snapshots.items():
 
@@ -13,7 +13,7 @@ for snapshot, title in snapshots.items():
     st_deviation = np.std(r_max, ddof=1)
     mean = np.mean(r_max)
 
-    with open(join("results_table.csv"), "a", newline='') as myFile:
+    with open(join("reg results_table.csv"), "a", newline='') as myFile:
         writer = csv.writer(myFile)
         writer.writerow([title, mean, st_deviation])
 
