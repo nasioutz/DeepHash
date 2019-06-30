@@ -268,6 +268,8 @@ for args in argument_list:
         args.regularizer, args.regularization_factor,args.reg_layer, args.reg_batch_targets, args.reg_retargeting_step))
     plot.clear()
 
+
+
     if args.evaluate:
         maps = model.validation(database_img, query_img, args)
         for key in maps:
