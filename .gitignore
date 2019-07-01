@@ -258,9 +258,6 @@ examples/dch/2019_5_10_2_56_44/log.txt
 examples/dch/2019_5_10_2_58_25/log.txt
 examples/dch/2019_5_14_16_2_52/log.txt
 examples/dch/2019_5_14_16_2_54/log.txt
-DeepHash/data_provider/extracted_targets/cifar10/fc8_16.npy
-DeepHash/data_provider/extracted_targets/cifar10/fc8_32.npy
-DeepHash/data_provider/extracted_targets/cifar10/fc8_48.npy
 examples/dch/2019_5_15_16_34_6/log.txt
 examples/dch/2019_5_16_16_52_2/log.txt
 examples/dch/2019_5_16_16_52_4/log.txt
@@ -297,3 +294,6 @@ examples/dch/2019_6_8_19_5_28/log.txt
 examples/dch/2019_6_9_12_33_4/log.txt
 examples/dch/results_table.csv___jb_tmp___
 examples/dch/results_table.csv___jb_old___
+examples/dch/2019_7_1_12_41_42/log.txt
+examples/dch/2019_7_1_12_44_18/log.txt
+examples/dch/2019_7_1_12_47_47/log.txt

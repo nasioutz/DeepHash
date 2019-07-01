@@ -160,9 +160,9 @@ argument_list.append(Arguments(
                      pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
                      intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], reg_retargeting_step=10000,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=13000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.9,
-                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
+                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
                      reg_layer='fc8', regularizer='increase_class_center_distance', regularization_factor=0.025,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
