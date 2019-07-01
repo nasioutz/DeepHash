@@ -10,6 +10,7 @@ from os.path import join
 from time import localtime, sleep
 import tensorflow as tf
 import numpy as np
+import pickle
 warnings.filterwarnings("ignore", category = DeprecationWarning)
 warnings.filterwarnings("ignore", category = FutureWarning)
 
@@ -131,6 +132,7 @@ class Arguments:
         if not os.path.exists(join(self.snapshot_folder)):
             os.makedirs(join(self.snapshot_folder))
         self.log_file = join(self.snapshot_folder, "log.txt")
+        self.args_file = join(self.snapshot_folder,"args.file")
 
         if pretrain:
             self.pretrain_model_weights = join(self.snapshot_folder, 'models', 'model_weights_pretrain.npy')
@@ -140,6 +142,12 @@ class Arguments:
         self.backup_model_weights = join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy')
 
         self.file_path = file_path
+
+        print(vars(self))
+        open(args.log_file, "a").write(json.dumps(str(vars(self))) + "\n")
+
+        with open(self.args_file, "wb") as f:
+            pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
         sleep(2)
 
@@ -152,7 +160,7 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=32, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
                      pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      intermediate_pretrain_evaluations=[],
@@ -163,7 +171,7 @@ argument_list.append(Arguments(
                      batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.9,
                      gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
-                     reg_layer='fc8', regularizer='increase_class_center_distance', regularization_factor=0.025,
+                     reg_layer='fc8', regularizer='increase_class_center_similarity', regularization_factor=0.025,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
                      ))
@@ -185,8 +193,7 @@ for args in argument_list:
     args.img_te = join(file_path, 'data', args.dataset, "test.txt")
     args.img_db = join(file_path, 'data', args.dataset, "database.txt")
 
-    print(vars(args))
-    open(args.log_file, "a").write(json.dumps(str(vars(args)))+"\n")
+
 
     data_root = join(args.data_dir, args.dataset)
 

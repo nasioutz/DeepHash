@@ -20,7 +20,7 @@ import copy
 import examples.dch.target_extraction as t_extract
 
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
-feature_regulizers = ['negative_similarity', 'euclidean_distance']
+feature_regulizers = ['class_center']
 
 class DCH(object):
     def __init__(self, config):
