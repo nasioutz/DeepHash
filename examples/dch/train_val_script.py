@@ -163,7 +163,7 @@ argument_list.append(Arguments(
                      batch_size=256, val_batch_size=16, hamming_range=120, iter_num=13000,
                      trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.9,
                      gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=False,
-                     reg_layer='fc8', regularizer='increase_batch_center_similarity', regularization_factor=0.025,
+                     reg_layer='fc8', regularizer='increase_class_center_distance', regularization_factor=0.025,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
                      ))

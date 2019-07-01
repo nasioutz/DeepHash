@@ -241,8 +241,8 @@ def img_alexnet_layers_custom(img, batch_size, output_dim, stage, model_weights,
     train_layers = []
     train_last_layer = []
     # print("loading img model from %s" % model_weights)
-    net_data = dict(np.load(model_weights, encoding='bytes').item())
-    backup_net_data = dict(np.load(backup_model_weights, encoding='bytes').item())
+    net_data = dict(np.load(model_weights, encoding='bytes',allow_pickle=True).item())
+    backup_net_data = dict(np.load(backup_model_weights, encoding='bytes',allow_pickle=True).item())
     # print(list(net_data.keys()))
 
     # swap(2,1,0), bgr -> rgb

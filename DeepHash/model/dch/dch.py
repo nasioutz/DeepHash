@@ -61,12 +61,12 @@ class DCH(object):
 
         self.global_step = tf.Variable(0, trainable=False)
 
-        if not self.extract_features:
+        if not self.extract_features and not self.batch_targets:
             self.targets = np.load(
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.pretrn_layer + ".npy"))
 
-        if (not self.extract_hashlayer_features) and self.regularizer in feature_regulizers:
+        if ((not self.extract_hashlayer_features) and self.regularizer in feature_regulizers):
             if self.reg_layer == 'fc8':
                 self.targets_filename = self.reg_layer+"_" + str(self.output_dim)
             else:
