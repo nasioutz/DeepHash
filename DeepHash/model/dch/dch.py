@@ -20,7 +20,7 @@ import copy
 import examples.dch.target_extraction as t_extract
 
 layer_output_dim = {'conv5': 256, 'fc7': 4096}
-feature_regulizers = ['class_center']
+feature_regulizers = ['class_center','negative_similarity', 'euclidean_distance']
 
 class DCH(object):
     def __init__(self, config):
@@ -61,6 +61,39 @@ class DCH(object):
 
         self.global_step = tf.Variable(0, trainable=False)
 
+        if "reduce" in self.regularizer:
+            self.loss_direction='reduce'
+            self.regularizer = self.regularizer.replace("reduce_",'')
+        elif "increase" in self.regularizer:
+            self.loss_direction='increase'
+            self.regularizer = self.regularizer.replace("increase_",'')
+
+        if "distance" in self.regularizer:
+            self.loss_scale='distance'
+            self.regularizer = self.regularizer.replace("_distance",'')
+        elif "similarity" in self.regularizer:
+            self.loss_scale='similarity'
+            self.regularizer = self.regularizer.replace("_similarity",'')
+
+        if "knn" in self.regularizer:
+            if "negative_nonclass_knn" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[3])
+                self.regularizer = self.regularizer.split("_")[0] + "_" + self.regularizer.split("_")[1] + "_" + \
+                                   self.regularizer.split("_")[2]
+            elif "negative_knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[2])
+                self.regularizer = self.regularizer.split("_")[0] + "_" + self.regularizer.split("_")[1]
+            elif "nonclass_knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[2])
+                self.regularizer = self.regularizer.split("_")[0] + "_" + self.regularizer.split("_")[1]
+            elif "knn_" in self.regularizer:
+                self.knn_k = int(self.regularizer.split("_")[1])
+                self.regularizer = self.regularizer.split("_")[0]
+            else:
+                print("WARNING: KNN k not set. Setting default value of 20")
+        else:
+            self.knn_k = None
+
         if not self.extract_features and not self.batch_targets:
             self.targets = np.load(
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
@@ -76,41 +109,6 @@ class DCH(object):
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.targets_filename + ".npy"))
             self.targets = self.original_targets
-
-
-        if "knn" in self.regularizer:
-            if "negative_nonclass_knn" in self.regularizer:
-                self.knn_k = int(self.regularizer.split("_")[3])
-                self.regularizer = self.regularizer.split("_")[0] + "_" +self.regularizer.split("_")[1]+ "_" + self.regularizer.split("_")[2]
-            elif "negative_knn_" in self.regularizer:
-                self.knn_k = int(self.regularizer.split("_")[2])
-                self.regularizer = self.regularizer.split("_")[0]+"_"+self.regularizer.split("_")[1]
-            elif "nonclass_knn_" in self.regularizer:
-                self.knn_k = int(self.regularizer.split("_")[2])
-                self.regularizer = self.regularizer.split("_")[0]+"_"+self.regularizer.split("_")[1]
-            elif "knn_" in self.regularizer:
-                self.knn_k = int(self.regularizer.split("_")[1])
-                self.regularizer = self.regularizer.split("_")[0]
-            else:
-                print("WARNING: KNN k not set. Setting default value of 20")
-        else:
-            self.knn_k = None
-
-        if "reduce" in self.regularizer:
-            self.loss_direction='reduce'
-            self.regularizer = self.regularizer.replace("reduce_",'')
-        elif "increase" in self.regularizer:
-            self.loss_direction='increase'
-            self.regularizer = self.regularizer.replace("increase_",'')
-
-        if "distance" in self.regularizer:
-            self.loss_scale='distance'
-            self.regularizer = self.regularizer.replace("_distance",'')
-        elif "similarity" in self.regularizer:
-            self.loss_scale='similarity'
-            self.regularizer = self.regularizer.replace("_similarity",'')
-
-
 
 
         self.batch_target_op = self.batch_target_calculation()
