@@ -41,7 +41,6 @@ class Arguments:
                        pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy', extract_hashlayer_features=False,
                        reg_batch_targets=False, recuring_training=1, reg_retargeting_step = 10000, knn_k = 20, search_classification=''):
 
-
         self.dataset = dataset
         if hash_layer == 'fc8':
             self.output_dim = output_dim
@@ -118,6 +117,7 @@ class Arguments:
         self.data_dir = data_dir
         self.save_evaluation_models = save_evaluation_models
         self.recuring_training = recuring_training
+        self.recuring_training_current_loop = 0
         self.search_classification = search_classification
 
         self.R = None
@@ -160,22 +160,21 @@ argument_list = []
 
 
 argument_list.append(Arguments(
-                     dataset='coco', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+                     dataset='nuswide_81', output_dim=48, unsupervised=False, with_tanh=True, gpus='2', recuring_training=5,
                      pretrain=False, pretrain_evaluation=False, extract_features=False,
                      finetune_all_pretrain=True, pretrain_top_k=100,
                      intermediate_pretrain_evaluations=[],
                      pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
                      pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
                      training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], search_classification='', reg_retargeting_step=10000,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
-                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.9,
-                     gamma=10, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
-                     reg_layer='fc8', regularizer='increase_nonclass_knn_20_distance', regularization_factor=0.00025,
+                     intermediate_evaluations=[1000, 5000, 9000, 13000, 15000, 17000, 19000], search_classification='q=0.0065', reg_retargeting_step=10000,
+                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=19000,
+                     trn_loss_type='cauchy', lr=0.0005, decay_step=10000, decay_factor=0.9,
+                     gamma=20, q_lambda=0.001, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
+                     reg_layer='fc8', regularizer='reduce_batch_center_distance', regularization_factor=0.0,
                      data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
                      #model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
                      ))
-
 
 #args = parser.parse_args()
 
@@ -244,6 +243,8 @@ for args in argument_list:
     recuring_training_results = []
 
     for i in range(args.recuring_training):
+
+        args.recuring_training_current_loop = i
 
         if args.training:
             model_weights, training_results = model.train(train_img, args, database_img, query_img, train_iteration=i+1)
