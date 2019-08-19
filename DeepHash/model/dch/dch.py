@@ -74,13 +74,15 @@ class DCH(object):
         elif "similarity" in self.regularizer:
             self.loss_scale='similarity'
             self.regularizer = self.regularizer.replace("_similarity",'')
+        elif "cauchy" in self.regularizer:
+            self.loss_scale = 'cauchy'
+            self.regularizer = self.regularizer.replace("_cauchy", '')
+        elif "cosine" in self.regularizer:
+            self.loss_scale = 'cosine'
+            self.regularizer = self.regularizer.replace("_cosine", '')
 
         if "knn" in self.regularizer:
-            if "negative_nonclass_knn" in self.regularizer:
-                self.knn_k = int(self.regularizer.split("_")[3])
-                self.regularizer = self.regularizer.split("_")[0] + "_" + self.regularizer.split("_")[1] + "_" + \
-                                   self.regularizer.split("_")[2]
-            elif "negative_knn_" in self.regularizer:
+            if "class_knn_" in self.regularizer:
                 self.knn_k = int(self.regularizer.split("_")[2])
                 self.regularizer = self.regularizer.split("_")[0] + "_" + self.regularizer.split("_")[1]
             elif "nonclass_knn_" in self.regularizer:
@@ -196,6 +198,18 @@ class DCH(object):
 
         return corrected_targets
 
+    def apply_loss_scale(self, per_img_avg_loss):
+
+        if self.loss_scale == 'similarity':
+            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg_loss), dtype=tf.float32)))
+        elif self.loss_scale == 'cauchy':
+            per_img_avg_in_scale = self.gamma / (self.gamma + per_img_avg_loss)
+        else:
+            per_img_avg_in_scale = per_img_avg_loss
+
+        return per_img_avg_in_scale
+
+
     def cauchy_cross_entropy_loss(self, u, label_u, v=None, label_v=None, gamma=1, normed=True):
 
 
@@ -286,10 +300,7 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, mean)
 
-        if self.loss_scale=='similarity':
-            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
-        else:
-            per_img_avg_in_scale = per_img_avg
+        per_img_avg_in_scale = self.apply_loss_scale(per_img_avg)
 
         loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
 
@@ -307,10 +318,7 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, tf.reduce_mean(u, 0))
 
-        if self.loss_scale == 'similarity':
-            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
-        else:
-            per_img_avg_in_scale = per_img_avg
+        per_img_avg_in_scale = self.apply_loss_scale(per_img_avg)
 
         loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
 
@@ -334,10 +342,7 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, tf.reduce_mean(tf.gather(u, indices), 1))
 
-        if self.loss_scale == 'similarity':
-            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
-        else:
-            per_img_avg_in_scale = per_img_avg
+        per_img_avg_in_scale = self.apply_loss_scale(per_img_avg)
 
         loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
 
@@ -353,6 +358,8 @@ class DCH(object):
         if self.knn_k is not None:
             k = self.knn_k
 
+        version='normal'
+
         indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
         iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
 
@@ -360,11 +367,33 @@ class DCH(object):
             return tf.less(i, iters)
 
         def body(indices, i):
-            distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
-            b1_nt = tf.where(tf.not_equal(tf.gather(label_u, i, axis=0), 1))
-            corrected_distances_b1 = tf.where(
-                tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1)),
+
+            if self.loss_scale == 'cosine':
+                distances = tfdist.distance(u, u, pair=True, dist_type='cosine')
+            else:
+                distances = tfdist.distance(u, u, pair=True, dist_type='euclidean')
+            b1_nt = tf.where(tf.equal(tf.gather(label_u, i, axis=0), 1))
+
+            if version=='normal':
+                corrected_distances_b1 = tf.where(
+                tf.logical_not(tf.squeeze(tf.reduce_any(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), axis=1))),
                 tf.gather(distances, i, axis=0), tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
+
+            elif version=='test1':
+                corrected_distances_b1 = tf.where(
+                    tf.logical_not(
+                        tf.greater_equal(
+                            tf.squeeze(tf.reduce_sum(tf.cast(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), tf.float64), axis=1)),
+
+                            tf.floordiv(tf.reduce_sum(tf.squeeze(
+                                tf.reduce_sum(tf.cast(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), tf.float64),
+                                              axis=1))), tf.cast(tf.count_nonzero(tf.squeeze(
+                                tf.reduce_sum(tf.cast(tf.equal(tf.gather(label_u, b1_nt, axis=1), 1), tf.float64),
+                                              axis=1))), tf.float64))
+                        )),
+                    tf.gather(distances, i, axis=0),
+                    tf.multiply(tf.ones_like(tf.gather(distances, i, axis=0)), float("inf")))
+
             val, ind = tf.math.top_k(-corrected_distances_b1, k=k, sorted=True)
             return [tf.concat([indices, tf.reshape(ind, shape=[1, -1])], 0), tf.add(i, 1)]
 
@@ -376,10 +405,7 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, tf.reduce_mean(tf.gather(u, indices), 1))
 
-        if self.loss_scale == 'similarity':
-            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
-        else:
-            per_img_avg_in_scale = per_img_avg
+        per_img_avg_in_scale = self.apply_loss_scale(per_img_avg)
 
         loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
 
@@ -418,10 +444,7 @@ class DCH(object):
         else:
             per_img_avg = tfdist.euclidean(u, tf.reduce_mean(tf.gather(u, indices), 1))
 
-        if self.loss_scale == 'similarity':
-            per_img_avg_in_scale = tf.negative(tf.exp(tf.cast(tf.negative(per_img_avg), dtype=tf.float32)))
-        else:
-            per_img_avg_in_scale = per_img_avg
+        per_img_avg_in_scale = self.apply_loss_scale(per_img_avg)
 
         loss_before_direction = tf.reduce_mean(per_img_avg_in_scale)
 
@@ -619,9 +642,9 @@ class DCH(object):
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 
-            _, loss, train_loss, reg_loss, output, reg_output, summary = self.sess.run(
+            _, loss, train_loss, q_loss, reg_loss, output, reg_output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.train_loss, self.reg_loss, self.img_last_layer,
+                                        [self.train_op, self.loss, self.train_loss, self.q_loss,self.reg_loss, self.img_last_layer,
                                          self.img_train_layer[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
@@ -629,9 +652,6 @@ class DCH(object):
             train_writer.add_summary(summary, train_iter)
 
             img_dataset.feed_batch_output(self.batch_size, output)
-
-            #q_loss = loss - cos_loss
-            q_loss = 0.0
 
             if verbose:
                 t_range.set_description(
@@ -665,8 +685,6 @@ class DCH(object):
                     self.dataset, self.output_dim, self.lr, self.decay_step,
                     self.regularizer, self.regularization_factor, self.reg_layer, self.reg_batch_targets,
                     self.reg_retargeting_step))
-
-
 
         self.save_model()
         print("model saved")
