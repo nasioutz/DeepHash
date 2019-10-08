@@ -470,7 +470,7 @@ class DCH(object):
                 self.reg_loss_img = 0
 
             if not self.sec_regularizer == None:
-                self.sec_reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer],
+                self.sec_reg_loss_img = self.loss_function[self.sec_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.sec_loss_direction,
                                                                          self.sec_loss_scale, self.sec_knn_k)
             else:
