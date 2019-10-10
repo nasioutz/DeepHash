@@ -11,37 +11,46 @@ from time import localtime, sleep
 import tensorflow as tf
 import numpy as np
 import pickle
-warnings.filterwarnings("ignore", category = DeprecationWarning)
-warnings.filterwarnings("ignore", category = FutureWarning)
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-def exclude_from_list(a,b):
-    return list(set(a)-set(b))
+def exclude_from_list(a, b):
+    return list(set(a) - set(b))
 
 
-def up_Dir(path,n=1):
+def up_Dir(path, n=1):
     for i in range(n):
         path = os.path.dirname(path)
     return path
 
 
-file_path = up_Dir(os.getcwd(),2)
+file_path = up_Dir(os.getcwd(), 2)
 
 
 class Arguments:
-    def __init__(self, lr=0.005, output_dim=64, alpha=0.5, bias=0.0, gamma=20, iter_num=2000, q_lambda=0.0, dataset='nuswide_81',gpus='0',
-                       log_dir='tflog', batch_size=128, val_batch_size=16, decay_step=10000,decay_factor=0.1, with_tanh=True,
-                       img_model='alexnet', model_weights=join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy'),
-                       finetune_all=True, save_dir='models',data_dir='hashnet\data', evaluate=True, evaluate_all_radiuses=True,
-                       reg_layer='fc8', regularizer='average', regularization_factor=1.0, unsupervised=False, random_query=False,
-                       pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
-                       pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False, finetune_all_pretrain=False,
-                       retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num = 2000,
-                       hash_layer='fc8', hamming_range=None, intermediate_pretrain_evaluations=[], intermediate_evaluations=[],
-                       pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy', extract_hashlayer_features=False,
-                       reg_batch_targets=False, recuring_training=1, reg_retargeting_step = 10000, knn_k = 20, search_classification='',
-                       sec_reg_layer='fc8', sec_regularizer=None, sec_regularization_factor=0.025,):
-
+    def __init__(self, lr=0.005, output_dim=64, alpha=0.5, bias=0.0, gamma=20, iter_num=2000, q_lambda=0.0,
+                 dataset='nuswide_81', gpus='0',
+                 log_dir='tflog', batch_size=128, val_batch_size=16, decay_step=10000, decay_factor=0.1, with_tanh=True,
+                 img_model='alexnet',
+                 model_weights=join(file_path, 'DeepHash', 'architecture', 'single_model', 'pretrained_model',
+                                    'reference_pretrain.npy'),
+                 finetune_all=True, save_dir='models', data_dir='hashnet\data', evaluate=True,
+                 evaluate_all_radiuses=True,
+                 reg_layer='fc8', regularizer='average', regularization_factor=1.0, unsupervised=False,
+                 random_query=False,
+                 pretrain=False, pretrn_layer=None, pretrain_lr=0.00001, save_evaluation_models=False, training=False,
+                 pretrain_evaluation=False, pretrain_top_k=100, batch_targets=True, extract_features=False,
+                 finetune_all_pretrain=False,
+                 retargeting_step=10000, pretrain_decay_step=10000, pretrain_decay_factor=0.9, pretrain_iter_num=2000,
+                 hash_layer='fc8', hamming_range=None, intermediate_pretrain_evaluations=[],
+                 intermediate_evaluations=[],
+                 pretrn_loss_type='euclidean_distance', trn_loss_type='cauchy', extract_hashlayer_features=False,
+                 reg_batch_targets=False, recuring_training=1, reg_retargeting_step=10000, knn_k=20,
+                 search_classification='',
+                 sec_reg_layer='fc8', sec_regularizer=None, sec_regularization_factor=0.025,
+                 ter_reg_layer='fc8', ter_regularizer=None, ter_regularization_factor=0.025, ):
 
         self.dataset = dataset
         if hash_layer == 'fc8':
@@ -89,6 +98,10 @@ class Arguments:
         self.sec_reg_layer = sec_reg_layer
         self.sec_regularizer = sec_regularizer
 
+        self.ter_regularization_factor = ter_regularization_factor
+        self.ter_reg_layer = ter_reg_layer
+        self.ter_regularizer = ter_regularizer
+
         self.reg_retargeting_step = reg_retargeting_step
         self.reg_batch_targets = reg_batch_targets
 
@@ -102,7 +115,7 @@ class Arguments:
         self.evaluate = evaluate
         self.evaluate_all_radiuses = evaluate_all_radiuses
         if hamming_range == None:
-            self.hamming_range = self.output_dim+1
+            self.hamming_range = self.output_dim + 1
         else:
             self.hamming_range = hamming_range
         self.pretrain_evaluation = pretrain_evaluation
@@ -145,7 +158,8 @@ class Arguments:
         else:
             self.pretrain_model_weights = None
 
-        self.backup_model_weights = join(file_path,'DeepHash', 'architecture', 'single_model', 'pretrained_model', 'reference_pretrain.npy')
+        self.backup_model_weights = join(file_path, 'DeepHash', 'architecture', 'single_model', 'pretrained_model',
+                                         'reference_pretrain.npy')
 
         self.file_path = file_path
 
@@ -155,7 +169,6 @@ class Arguments:
         with open(self.args_file, "wb") as f:
             pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
 
-
         sleep(2)
 
 
@@ -163,27 +176,27 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 argument_list = []
 
-
 argument_list.append(Arguments(
-                     dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
-                     pretrain=False, pretrain_evaluation=False, extract_features=False,
-                     finetune_all_pretrain=True, pretrain_top_k=100,
-                     intermediate_pretrain_evaluations=[],
-                     pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
-                     pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
-                     training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
-                     intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], search_classification='', reg_retargeting_step=10000,
-                     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
-                     trn_loss_type='cauchy', lr=0.0065, decay_step=10000, decay_factor=0.9,
-                     gamma=35, q_lambda=0.055, hash_layer='fc8',  extract_hashlayer_features=False, reg_batch_targets=True,
-                     reg_layer='fc8', regularizer='reduce_nonclass_knn_20_distance', regularization_factor=0.025,
-                     sec_reg_layer='fc8', sec_regularizer='reduce_batch_center_distance', sec_regularization_factor=0.025,
-                     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
-                     #model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
-                     ))
+    dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+    pretrain=False, pretrain_evaluation=False, extract_features=False,
+    finetune_all_pretrain=True, pretrain_top_k=100,
+    intermediate_pretrain_evaluations=[],
+    pretrn_loss_type='euclidean_distance', pretrn_layer='fc7', batch_targets=True, pretrain_iter_num=2000,
+    pretrain_lr=5e-2, pretrain_decay_step=10000, pretrain_decay_factor=0.8, retargeting_step=10000,
+    training=True, evaluate=False, finetune_all=True, evaluate_all_radiuses=False, random_query=False,
+    intermediate_evaluations=[1000, 3000, 5000, 7000, 9000], search_classification='',
+    reg_retargeting_step=10000,
+    batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
+    trn_loss_type='cauchy', lr=0.001, decay_step=10000, decay_factor=0.9,
+    gamma=30, q_lambda=0.065, hash_layer='fc8', extract_hashlayer_features=False, reg_batch_targets=True,
+    reg_layer='fc8', regularizer='increase_nonclass_knn_35_distance', regularization_factor=0.25,
+    sec_reg_layer='fc8', sec_regularizer='reduce_batch_center_distance', sec_regularization_factor=0.025,
+    ter_reg_layer='fc8', ter_regularizer='reduce_class_center_distance', ter_regularization_factor=0.025,
+    data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),
+    # model_weights=join("2019_5_17_17_20_21", 'models', 'model_weights.npy')
+))
 
-
-#args = parser.parse_args()
+# args = parser.parse_args()
 
 for args in argument_list:
 
@@ -197,8 +210,6 @@ for args in argument_list:
     args.img_tr = join(file_path, 'data', args.dataset, "train.txt")
     args.img_te = join(file_path, 'data', args.dataset, "test.txt")
     args.img_db = join(file_path, 'data', args.dataset, "database.txt")
-
-
 
     data_root = join(args.data_dir, args.dataset)
 
@@ -214,10 +225,11 @@ for args in argument_list:
             args.batch_targets = True
             batch_toggle = True
         pretrain_buffer = args.pretrain
-        args.pretrain=True
+        args.pretrain = True
         new_features = model.feature_extraction(database_img, args)
-        np.save(join(args.file_path,"DeepHash","data_provider","extracted_targets",args.dataset,args.pretrn_layer+".npy"),new_features)
-        args.pretrain=pretrain_buffer
+        np.save(join(args.file_path, "DeepHash", "data_provider", "extracted_targets", args.dataset,
+                     args.pretrn_layer + ".npy"), new_features)
+        args.pretrain = pretrain_buffer
         if batch_toggle:
             args.batch_targets = False
         args.extract_features = False
@@ -242,7 +254,8 @@ for args in argument_list:
 
     if args.extract_hashlayer_features:
         new_features = model.hashlayer_feature_extraction(database_img, args)
-        np.save(join(args.file_path,"DeepHash","data_provider","extracted_targets",args.dataset,args.hash_layer+'_'+str(args.output_dim)+".npy"),new_features)
+        np.save(join(args.file_path, "DeepHash", "data_provider", "extracted_targets", args.dataset,
+                     args.hash_layer + '_' + str(args.output_dim) + ".npy"), new_features)
         args.extract_hashlayer_features = False
 
     tf.reset_default_graph()
@@ -252,7 +265,8 @@ for args in argument_list:
     for i in range(args.recuring_training):
 
         if args.training:
-            model_weights, training_results = model.train(train_img, args, database_img, query_img, train_iteration=i+1)
+            model_weights, training_results = model.train(train_img, args, database_img, query_img,
+                                                          train_iteration=i + 1)
             args.model_weights = model_weights
         recuring_training_results = recuring_training_results + [training_results]
         tf.reset_default_graph()
@@ -277,10 +291,9 @@ for args in argument_list:
                                 "\nRg.Fctr:{}, RgLr:{}, BtchTgt:{}, RgRetrStp:{}".format(
 
         args.snapshot_folder, args.dataset, args.output_dim, args.lr, args.decay_step,
-        args.regularizer, args.regularization_factor,args.reg_layer, args.reg_batch_targets, args.reg_retargeting_step))
+        args.regularizer, args.regularization_factor, args.reg_layer, args.reg_batch_targets,
+        args.reg_retargeting_step))
     plot.clear()
-
-
 
     if args.evaluate:
         maps = model.validation(database_img, query_img, args)
@@ -289,6 +302,6 @@ for args in argument_list:
             open(args.log_file, "a").write(("{}\t{}\n".format(key, maps[key])))
 
     print(vars(args))
-    open(args.log_file, "a").write(json.dumps(str(vars(args)))+"\n")
+    open(args.log_file, "a").write(json.dumps(str(vars(args))) + "\n")
 
     tf.reset_default_graph()

@@ -38,7 +38,11 @@ def add_to_table(snapshots, table='default_table.csv'):
             with open(join(table), "a", newline='') as myFile:
                 writer = csv.writer(myFile)
                 writer.writerow(
-                    [args.dataset, args.output_dim, args.regularizer, args.regularization_factor, mean, st_deviation])
+                    [args.dataset, args.output_dim,
+                     args.regularizer, args.regularization_factor,
+                     args.sec_regularizer, args.sec_regularization_factor,
+                     args.ter_regularizer, args.ter_regularization_factor,
+                     mean, st_deviation, args.snapshot_folder])
         except:
             inf = open(join(snapshot, 'log.txt'), 'r')
             args = eval(inf.readline()[1:-2])
@@ -47,7 +51,11 @@ def add_to_table(snapshots, table='default_table.csv'):
             with open(join(table), "a", newline='') as myFile:
                 writer = csv.writer(myFile)
                 writer.writerow(
-                    [args['dataset'], args['output_dim'], args['regularizer'], args['regularization_factor'], mean, st_deviation])
+                    [args['dataset'], args['output_dim'],
+                     args['regularizer'], args['regularization_factor'],
+                     args['sec_regularizer'], args['sec_regularization_factor'],
+                     args['ter_regularizer'], args['ter_regularization_factor'],
+                     mean, st_deviation, args['snapshot_folder']])
 
 
 starting_snapshot = '2019_6_30_14_42_1'

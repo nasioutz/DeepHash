@@ -102,6 +102,8 @@ class DCH(object):
             self.regularizer, self.loss_direction, self.loss_scale, self.knn_k = process_regularizer_input(self.regularizer)
         if not self.sec_regularizer == None:
             self.sec_regularizer, self.sec_loss_direction, self.sec_loss_scale, self.sec_knn_k = process_regularizer_input(self.sec_regularizer)
+        if not self.ter_regularizer == None:
+            self.ter_regularizer, self.ter_loss_direction, self.ter_loss_scale, self.ter_knn_k = process_regularizer_input(self.ter_regularizer)
 
 
         if not self.extract_features and not self.batch_targets:
@@ -109,7 +111,7 @@ class DCH(object):
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.pretrn_layer + ".npy"))
 
-        if ((not self.extract_hashlayer_features) and self.regularizer in feature_regulizers):
+        if ((not self.extract_hashlayer_features) and self.feature_regularizer_check()):
             if self.reg_layer == 'fc8':
                 self.targets_filename = self.reg_layer+"_" + str(self.output_dim)
             else:
@@ -178,6 +180,12 @@ class DCH(object):
 
         np.save(model_file, np.array(model))
         return model_file
+
+    def feature_regularizer_check(self):
+
+        return ((self.regularizer in feature_regulizers and self.regularization_factor > 0) or\
+                (self.sec_regularizer in feature_regulizers and self.sec_regularization_factor > 0) or\
+                (self.ter_regularizer in feature_regulizers and self.ter_regularization_factor > 0))
 
     def batch_target_calculation(self):
 
@@ -360,8 +368,7 @@ class DCH(object):
 
     def nonclass_knn_loss(self,u, label_u, loss_direction, loss_scale, knn_k, normed=False):
 
-        if knn_k is not None:
-            k = knn_k
+        k = knn_k
 
         indices = tf.constant(0, shape=[0, k], dtype=tf.int32)
         iters = tf.cond(tf.equal(self.stage,0),lambda: self.batch_size, lambda: self.val_batch_size)
@@ -476,10 +483,19 @@ class DCH(object):
             else:
                 self.sec_reg_loss_img = 0
 
+            if not self.ter_regularizer == None:
+                self.ter_reg_loss_img = self.loss_function[self.ter_regularizer](self.img_train_layer[self.reg_layer],
+                                                                         self.img_label, self.ter_loss_direction,
+                                                                         self.ter_loss_scale, self.ter_knn_k)
+            else:
+                self.ter_reg_loss_img = 0
+
+
             self.reg_loss = self.reg_loss_img * self.regularization_factor
             self.sec_reg_loss = self.sec_reg_loss_img * self.sec_regularization_factor
+            self.ter_reg_loss = self.ter_reg_loss_img * self.ter_regularization_factor
 
-            self.main_loss = self.train_loss + self.q_loss + self.reg_loss + self.sec_reg_loss
+            self.main_loss = self.train_loss + self.q_loss + self.reg_loss + self.sec_reg_loss + self.ter_reg_loss
 
             learning_rate = self.lr
             decay_step = self.decay_step
@@ -487,6 +503,8 @@ class DCH(object):
             tf.summary.scalar(self.trn_loss_type+' loss', self.train_loss)
             tf.summary.scalar('quantization_loss', self.q_loss)
             tf.summary.scalar('regularization_loss', self.reg_loss)
+            tf.summary.scalar('secondary_regularization_loss', self.sec_reg_loss)
+            tf.summary.scalar('tertiary_regularization_loss', self.ter_reg_loss)
 
         self.loss = self.main_loss
 
@@ -614,8 +632,7 @@ class DCH(object):
         for train_iter in t_range:
 
             if not self.reg_batch_targets and\
-               self.regularization_factor > 0 and\
-               self.regularizer in feature_regulizers and\
+               self.feature_regularizer_check() and\
                (train_iter+1) % self.reg_retargeting_step == 0 and\
                not (train_iter+1) == train_iter:
                 extract_config = copy.deepcopy(self.config)
@@ -633,17 +650,19 @@ class DCH(object):
 
             images, labels = img_dataset.next_batch(self.batch_size)
 
-            if self.regularizer in feature_regulizers and self.regularization_factor > 0 and self.reg_batch_targets:
+            if self.feature_regularizer_check() and\
+                 self.reg_batch_targets:
 
                 self.targets = self.sess.run(
                         self.batch_target_op,
                         feed_dict={self.img: images, self.img_label: labels}
                 )
 
-            _, loss, train_loss, reg_loss, output, reg_output, summary = self.sess.run(
+            _, loss, train_loss, reg_loss, sec_reg_loss, ter_reg_loss, output, reg_output, summary = self.sess.run(
 
-                                        [self.train_op, self.loss, self.train_loss, self.reg_loss, self.img_last_layer,
-                                         self.img_train_layer[self.reg_layer], self.merged],
+                                        [self.train_op, self.loss, self.train_loss,
+                                         self.reg_loss, self.sec_reg_loss, self.ter_reg_loss,
+                                         self.img_last_layer, self.img_train_layer[self.reg_layer], self.merged],
                                         feed_dict={self.img: images, self.img_label: labels}
                                     )
 
@@ -656,8 +675,9 @@ class DCH(object):
 
             if verbose:
                 t_range.set_description(
-                    "Training Model | Loss = {:2f}, {} Loss = {:2f}, Quantization_Loss = {:2f}, Regularization Loss = {:2f}"
-                        .format(loss, self.trn_loss_type, train_loss, q_loss, reg_loss))
+                    "Training Model | Loss = {:2f}, {} Loss = {:2f}, Quantization_Loss = {:2f},"
+                    " Regularization Loss = {:2f}, Secondary Regularization Loss = {:2f}, Tertiary Regularization Loss = {:2f}"
+                        .format(loss, self.trn_loss_type, train_loss, q_loss, reg_loss, sec_reg_loss, ter_reg_loss))
                 t_range.refresh()
 
             if train_iter in self.intermediate_evaluations:
