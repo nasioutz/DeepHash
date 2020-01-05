@@ -206,3 +206,6 @@ coco,16,reduce_class_center_distance,0.1,None,0,None,177,0.710625075,0.008290152
 cifar10,64,increase_nonclass_knn_35_distance,0.25,reduce_batch_center_distance,0.025,None,178,0.835735875,0.004066712,2019_10_8_14_46_3
 coco,32,reduce_class_center_distance,0.025,reduce_batch_center_distance,0.1,None,179,0.756936333,0.004934057,2019_10_8_14_50_18
 cifar10,48,increase_nonclass_knn_35_distance,0.25,reduce_batch_center_distance,0.025,None,180,0.83359776,0.002595387,2019_10_9_16_37_53
+cifar10,64,increase_nonclass_knn_35_distance,0.25,reduce_batch_center_distance,0.025,reduce_class_center_distance,0.025,0.8570503882720792,0.002185063127566451,2019_10_10_13_23_22
+cifar10,48,increase_nonclass_knn_35_distance,0.25,reduce_batch_center_distance,0.025,reduce_class_center_distance,0.025,0.8501324102994625,0.002893137197139663,2019_10_11_12_14_53
+cifar10,32,increase_nonclass_knn_35_distance,0.1,reduce_batch_center_distance,0.025,reduce_class_center_distance,0.025,0.8183009934559216,0.003530741697096494,2019_10_12_16_46_48

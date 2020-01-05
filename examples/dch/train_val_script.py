@@ -177,7 +177,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 argument_list = []
 
 argument_list.append(Arguments(
-    dataset='cifar10', output_dim=64, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
+    dataset='cifar10', output_dim=32, unsupervised=False, with_tanh=True, gpus='0', recuring_training=5,
     pretrain=False, pretrain_evaluation=False, extract_features=False,
     finetune_all_pretrain=True, pretrain_top_k=100,
     intermediate_pretrain_evaluations=[],
@@ -189,7 +189,7 @@ argument_list.append(Arguments(
     batch_size=256, val_batch_size=16, hamming_range=120, iter_num=9000,
     trn_loss_type='cauchy', lr=0.001, decay_step=10000, decay_factor=0.9,
     gamma=30, q_lambda=0.065, hash_layer='fc8', extract_hashlayer_features=False, reg_batch_targets=True,
-    reg_layer='fc8', regularizer='increase_nonclass_knn_35_distance', regularization_factor=0.25,
+    reg_layer='fc8', regularizer='increase_nonclass_knn_35_distance', regularization_factor=0.1,
     sec_reg_layer='fc8', sec_regularizer='reduce_batch_center_distance', sec_regularization_factor=0.025,
     ter_reg_layer='fc8', ter_regularizer='reduce_class_center_distance', ter_regularization_factor=0.025,
     data_dir=join(up_Dir(file_path, 1), "hashnet", "data"),

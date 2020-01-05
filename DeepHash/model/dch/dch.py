@@ -474,21 +474,21 @@ class DCH(object):
                 self.reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer],
                                                                      self.img_label, self.loss_direction, self.loss_scale, self.knn_k)
             else:
-                self.reg_loss_img = 0
+                self.reg_loss_img = tf.consant(0)
 
             if not self.sec_regularizer == None:
                 self.sec_reg_loss_img = self.loss_function[self.sec_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.sec_loss_direction,
                                                                          self.sec_loss_scale, self.sec_knn_k)
             else:
-                self.sec_reg_loss_img = 0
+                self.sec_reg_loss_img = tf.consant(0)
 
             if not self.ter_regularizer == None:
                 self.ter_reg_loss_img = self.loss_function[self.ter_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.ter_loss_direction,
                                                                          self.ter_loss_scale, self.ter_knn_k)
             else:
-                self.ter_reg_loss_img = 0
+                self.ter_reg_loss_img = tf.consant(0)
 
 
             self.reg_loss = self.reg_loss_img * self.regularization_factor

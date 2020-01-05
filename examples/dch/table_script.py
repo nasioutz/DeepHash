@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from os.path import join
+from os.path import isfile
 import csv
 import pickle
 import re
@@ -24,43 +25,48 @@ def add_to_table(snapshots, table='default_table.csv'):
 
     for snapshot in snapshots:
 
-        r = np.load(join(snapshot, "models", "recuring_results.npy"))
-        r = r[:, :, 0]
-        r_max = np.max(r, 1)
+        if not isfile(join(snapshot, "models", "recuring_results.npy")):
+            pass
+        else:
+            rr = np.load(join(snapshot, "models", "recuring_results.npy"))
+            rr_map = rr[:, :, 0]
+            rr_precision = rr[:, :, 2]
+            rr_recall = rr[:, :, 1]
+            map = np.mean(np.max(rr_map,1))
+            st_deviation = np.std(np.max(rr_map,1), ddof=1)
+            recall = np.mean(np.mean(np.take_along_axis(rr_recall,np.reshape(np.repeat(np.argmax(rr_map,1),rr_recall.shape[1]),rr_recall.shape),axis=1),1))
+            precision = np.mean(np.mean(np.take_along_axis(rr_precision,np.reshape(np.repeat(np.argmax(rr_map,1),rr_precision.shape[1]),rr_recall.shape),axis=1),1))
 
-        st_deviation = np.std(r_max, ddof=1)
-        mean = np.mean(r_max)
+            try:
+                with open(join(snapshot,"args.file"), "rb") as f:
+                    args = pickle.load(f)
 
-        try:
-            with open(join(snapshot,"args.file"), "rb") as f:
-                args = pickle.load(f)
+                with open(join(table), "a", newline='') as myFile:
+                    writer = csv.writer(myFile)
+                    writer.writerow(
+                        [args.dataset, args.output_dim,
+                         args.regularizer, args.regularization_factor,
+                         args.sec_regularizer, args.sec_regularization_factor,
+                         args.ter_regularizer, args.ter_regularization_factor,
+                         map, st_deviation, recall, precision, args.snapshot_folder])
+            except:
+                inf = open(join(snapshot, 'log.txt'), 'r')
+                args = eval(inf.readline()[1:-2])
+                inf.close()
 
-            with open(join(table), "a", newline='') as myFile:
-                writer = csv.writer(myFile)
-                writer.writerow(
-                    [args.dataset, args.output_dim,
-                     args.regularizer, args.regularization_factor,
-                     args.sec_regularizer, args.sec_regularization_factor,
-                     args.ter_regularizer, args.ter_regularization_factor,
-                     mean, st_deviation, args.snapshot_folder])
-        except:
-            inf = open(join(snapshot, 'log.txt'), 'r')
-            args = eval(inf.readline()[1:-2])
-            inf.close()
-
-            with open(join(table), "a", newline='') as myFile:
-                writer = csv.writer(myFile)
-                writer.writerow(
-                    [args['dataset'], args['output_dim'],
-                     args['regularizer'], args['regularization_factor'],
-                     args['sec_regularizer'], args['sec_regularization_factor'],
-                     args['ter_regularizer'], args['ter_regularization_factor'],
-                     mean, st_deviation, args['snapshot_folder']])
+                with open(join(table), "a", newline='') as myFile:
+                    writer = csv.writer(myFile)
+                    writer.writerow(
+                        [args['dataset'], args['output_dim'],
+                         args['regularizer'], args['regularization_factor'],
+                         args.get('sec_regularizer', 'None'), args.get('sec_regularization_factor', 0.0),
+                         args.get('ter_regularizer', 'None'), args.get('ter_regularization_factor', 0.0),
+                         map, st_deviation, recall, precision, args['snapshot_folder']])
 
 
-starting_snapshot = '2019_6_30_14_42_1'
+starting_snapshot = '2019_5_6_21_7_37'
 ending_snapshot = DEFAULT_ENDING
-table = 'default_table.csv'
+table = 'default_table_new.csv'
 
 if __name__ == "__main__":
 
