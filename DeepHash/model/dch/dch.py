@@ -30,6 +30,8 @@ def process_regularizer_input(regularizer):
     elif "increase" in regularizer:
         loss_direction = 'increase'
         regularizer = regularizer.replace("increase_", '')
+    else:
+        loss_direction = 'None'
 
     if "distance" in regularizer:
         loss_scale = 'distance'
@@ -37,6 +39,8 @@ def process_regularizer_input(regularizer):
     elif "similarity" in regularizer:
         loss_scale = 'similarity'
         regularizer = regularizer.replace("_similarity", '')
+    else:
+        loss_scale = 'None'
 
     if "knn" in regularizer:
         if "negative_nonclass_knn" in regularizer:
@@ -474,26 +478,26 @@ class DCH(object):
                 self.reg_loss_img = self.loss_function[self.regularizer](self.img_train_layer[self.reg_layer],
                                                                      self.img_label, self.loss_direction, self.loss_scale, self.knn_k)
             else:
-                self.reg_loss_img = tf.consant(0)
+                self.reg_loss_img = tf.constant(0.0)
 
             if not self.sec_regularizer == None:
                 self.sec_reg_loss_img = self.loss_function[self.sec_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.sec_loss_direction,
                                                                          self.sec_loss_scale, self.sec_knn_k)
             else:
-                self.sec_reg_loss_img = tf.consant(0)
+                self.sec_reg_loss_img = tf.constant(0.0)
 
             if not self.ter_regularizer == None:
                 self.ter_reg_loss_img = self.loss_function[self.ter_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.ter_loss_direction,
                                                                          self.ter_loss_scale, self.ter_knn_k)
             else:
-                self.ter_reg_loss_img = tf.consant(0)
+                self.ter_reg_loss_img = tf.constant(0.0)
 
 
-            self.reg_loss = self.reg_loss_img * self.regularization_factor
-            self.sec_reg_loss = self.sec_reg_loss_img * self.sec_regularization_factor
-            self.ter_reg_loss = self.ter_reg_loss_img * self.ter_regularization_factor
+            self.reg_loss = self.reg_loss_img * tf.constant(self.regularization_factor)
+            self.sec_reg_loss = self.sec_reg_loss_img * tf.constant(self.sec_regularization_factor)
+            self.ter_reg_loss = self.ter_reg_loss_img * tf.constant(self.ter_regularization_factor)
 
             self.main_loss = self.train_loss + self.q_loss + self.reg_loss + self.sec_reg_loss + self.ter_reg_loss
 
@@ -592,7 +596,7 @@ class DCH(object):
                 inter_model = model = DCH(inter_config)
                 inter_model.train(databases, close_session=False, verbose=False)
                 inter_config.model_weights = model.save_file
-                maps = inter_model.validation(databases, verbose=False)
+                full_results, maps = inter_model.validation(databases, verbose=False)
                 self.intermediate_maps = self.intermediate_maps + [maps.get(list(maps.keys())[4])]
                 plot.set(train_iter)
                 plot.plot('map',maps.get(list(maps.keys())[4]))
@@ -689,7 +693,7 @@ class DCH(object):
                 inter_config.training = False
                 inter_config.evaluate = True
                 inter_model = DCH(inter_config)
-                maps = inter_model.validation(databases, verbose=False)
+                full_results, maps = inter_model.validation(databases, verbose=False)
                 self.training_results = \
                 self.training_results + [[maps.get(list(maps.keys())[4]), maps.get(list(maps.keys())[3]), maps.get(list(maps.keys())[2])]]
                 plot.set(train_iter)
@@ -886,42 +890,57 @@ class DCH(object):
 
         self.sess.close()
 
-        if self.evaluate_all_radiuses:
+        prec = rec = mmap = np.zeros(self.hamming_range)
 
-            m_range = trange(self.hamming_range, desc="Calculating mAP @H<=",
-                             mininterval=self.hamming_range//4 if not verbose else 0.1, leave=True)
-            #prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
+        range = img_query.label.shape[1] if img_query.label.shape[1] < self.hamming_range else self.hamming_range
+        prec = rec = mmap = np.zeros(range)
+
+        if self.evaluate_all_radiuses == 'custom_range':
+
+            m_range = trange(range, desc="Calculating mAP @H<=",
+                             mininterval=range//4 if not verbose else 0.1, leave=True)
             for i in m_range:
-                prec_i, rec_i, mmap_i = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
-                plot.plot('prec', prec_i)
-                plot.plot('rec', rec_i)
-                plot.plot('mAP', mmap_i)
+                prec[i], rec[i], mmap[i] = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, i)
+                plot.plot('prec', prec[i])
+                plot.plot('rec', rec[i])
+                plot.plot('mAP', mmap[i])
                 plot.tick()
 
                 open(self.log_file, "a").writelines(
-                    'Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}\n'.format(i, prec_i, rec_i, mmap_i))
+                    'Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}\n'.format(i, prec[i], rec[i], mmap[i]))
                 m_range.set_description(
-                    desc='Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}'.format(i, prec_i, rec_i, mmap_i))
+                    desc='Results @H<={}, prec:{:.5f},  rec:%{:.5f},  mAP:%{:.5f}'.format(i, prec[i], rec[i], mmap[i]))
                 m_range.refresh()
 
                 if i == 2:
-                    prec, rec, mmap = prec_i, rec_i, mmap_i
+                    prec2, rec2, mmap2 = prec[i], rec[i], mmap[i]
 
             result_save_dir = os.path.join(self.snapshot_folder, self.log_dir, "plots")
             if os.path.exists(result_save_dir) is False:
                 os.makedirs(result_save_dir)
             plot.flush(result_save_dir)
 
-        else:
-            prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
+            np.save(join(self.snapshot_folder, 'models', 'hamming_range_results'),[prec,rec,mmap])
 
-        return {
+        elif self.evaluate_all_radiuses == 'full_range':
+
+            prec, rec, mmap = mAPs.get_precision_recall_by_Hamming_Radius_All(img_database, img_query)
+            prec2, rec2, mmap2 = prec[2], rec[2], mmap[2]
+
+            np.save(join(self.snapshot_folder, 'models', 'hamming_range_results'),[prec,rec,mmap])
+
+        else:
+            prec2, rec2, mmap2 = mAPs.get_precision_recall_by_Hamming_Radius(img_database, img_query, 2)
+
+
+
+        return  [prec, rec, mmap], {
             'i2i_by_feature': mAPs.get_mAPs_by_feature(img_database, img_query, verbose=verbose),
             'i2i_after_sign': mAPs.get_mAPs_after_sign(img_database, img_query, verbose=verbose),
-            'i2i_prec_radius_2': prec,
-            'i2i_recall_radius_2': rec,
-            'i2i_map_radius_2': mmap,
-        }
+            'i2i_prec_radius_2': prec2,
+            'i2i_recall_radius_2': rec2,
+            'i2i_map_radius_2': mmap2,
+               }
 
     def feature_extraction(self, img_database, close_session=True, verbose=False):
 
