@@ -104,9 +104,9 @@ class DCH(object):
 
         if not self.regularizer == None:
             self.regularizer, self.loss_direction, self.loss_scale, self.knn_k = process_regularizer_input(self.regularizer)
-        if not self.sec_regularizer == None:
+        if hasattr(self, 'sec_regularizer') and not self.sec_regularizer == None:
             self.sec_regularizer, self.sec_loss_direction, self.sec_loss_scale, self.sec_knn_k = process_regularizer_input(self.sec_regularizer)
-        if not self.ter_regularizer == None:
+        if hasattr(self, 'ter_regularizer') and not self.ter_regularizer == None:
             self.ter_regularizer, self.ter_loss_direction, self.ter_loss_scale, self.ter_knn_k = process_regularizer_input(self.ter_regularizer)
 
 
@@ -188,8 +188,8 @@ class DCH(object):
     def feature_regularizer_check(self):
 
         return ((self.regularizer in feature_regulizers and self.regularization_factor > 0) or\
-                (self.sec_regularizer in feature_regulizers and self.sec_regularization_factor > 0) or\
-                (self.ter_regularizer in feature_regulizers and self.ter_regularization_factor > 0))
+                (self.sec_regularizer in feature_regulizers and self.sec_regularization_factor > 0) if hasattr(self, 'sec_regularizer') else False or\
+                (self.ter_regularizer in feature_regulizers and self.ter_regularization_factor > 0) if hasattr(self, 'ter_regularizer') else False)
 
     def batch_target_calculation(self):
 
@@ -480,24 +480,25 @@ class DCH(object):
             else:
                 self.reg_loss_img = tf.constant(0.0)
 
-            if not self.sec_regularizer == None:
+            if not self.sec_regularizer == None if  hasattr(self, 'sec_regularizer') else False:
                 self.sec_reg_loss_img = self.loss_function[self.sec_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.sec_loss_direction,
                                                                          self.sec_loss_scale, self.sec_knn_k)
-            else:
-                self.sec_reg_loss_img = tf.constant(0.0)
+                self.sec_reg_loss = self.sec_reg_loss_img * tf.constant(self.sec_regularization_factor)
 
-            if not self.ter_regularizer == None:
+            else:
+                self.sec_reg_loss = tf.constant(0.0)
+
+            if not self.ter_regularizer == None if hasattr(self, 'ter_regularizer') else False:
                 self.ter_reg_loss_img = self.loss_function[self.ter_regularizer](self.img_train_layer[self.reg_layer],
                                                                          self.img_label, self.ter_loss_direction,
                                                                          self.ter_loss_scale, self.ter_knn_k)
-            else:
-                self.ter_reg_loss_img = tf.constant(0.0)
+                self.ter_reg_loss = self.ter_reg_loss_img * tf.constant(self.ter_regularization_factor)
 
+            else:
+                self.ter_reg_loss = tf.constant(0.0)
 
             self.reg_loss = self.reg_loss_img * tf.constant(self.regularization_factor)
-            self.sec_reg_loss = self.sec_reg_loss_img * tf.constant(self.sec_regularization_factor)
-            self.ter_reg_loss = self.ter_reg_loss_img * tf.constant(self.ter_regularization_factor)
 
             self.main_loss = self.train_loss + self.q_loss + self.reg_loss + self.sec_reg_loss + self.ter_reg_loss
 
