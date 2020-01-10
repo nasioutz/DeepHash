@@ -54,7 +54,7 @@ def write_csv(snapshot, map, st_deviation, recall, precision):
                  map, st_deviation, recall, precision, args['snapshot_folder']])
 
 def add_to_table(snapshots, table='default_table.csv',
-                 record_new_table=False, record_old_table=False, create_prcurve=True):
+                 record_new_table=False, record_old_table=False, create_prcurve=True, gpus='0'):
 
     for snapshot in snapshots:
         if isdir(join(snapshot)):
@@ -64,7 +64,7 @@ def add_to_table(snapshots, table='default_table.csv',
 
                 if isfile(join(snapshot, 'models', "model_weights.npy")) and create_prcurve:
 
-                    try:
+                    #try:
                         with open(join(snapshot, "args.file"), "rb") as f:
                             args = pickle.load(f)
 
@@ -80,12 +80,12 @@ def add_to_table(snapshots, table='default_table.csv',
                         args.img_db = join(file_path, 'data', args.dataset, "database.txt")
 
                         data_root = join(args.data_dir, args.dataset)
-                        print(args.img_te)
                         query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
                         args.model_weights = join(snapshot, 'models', 'model_weights.npy')
 
                         args.evaluate_all_radiuses = 'full_range'
+                        args.gpus = gpus
 
                         full_results, maps = model.validation(database_img, query_img, args)
 
@@ -98,8 +98,8 @@ def add_to_table(snapshots, table='default_table.csv',
                         plt.ylabel('Precision')
                         plt.clf()
                         tf.reset_default_graph()
-                    except:
-                        print("Arguments file was missing for ", snapshot)
+                    #except:
+                    #    print("Arguments file was missing for ", snapshot)
 
                 else:
                     if create_prcurve: print('No model weights file was found for ', snapshot)
@@ -135,9 +135,9 @@ def add_to_table(snapshots, table='default_table.csv',
         else:
             print("Directory ", snapshot, " was not found")
 
-snapshots = []
+snapshots = ['2019_7_7_14_0_32']
 
-starting_snapshot = join('2019_5_6_21_7_37')
+starting_snapshot = join('2019_7_7_14_0_32')
 ending_snapshot = DEFAULT_ENDING
 
 
@@ -147,10 +147,12 @@ record_new_table = False
 record_old_table = False
 create_prcurve = True
 
+gpus = '1'
+
 if __name__ == "__main__":
 
     if len(snapshots) == 0:
         directories = sorted_nicely(os.listdir())
         snapshots = directories[directories.index(starting_snapshot):directories.index(ending_snapshot)]
 
-    add_to_table(snapshots, table, record_new_table, record_old_table, create_prcurve)
+    add_to_table(snapshots, table, record_new_table, record_old_table, create_prcurve, gpus)
