@@ -60,46 +60,43 @@ def add_to_table(snapshots, table='default_table.csv',
         if isdir(join(snapshot)):
             if isfile(join(snapshot, "models", "recuring_results.npy")):
 
+                if isfile(join(snapshot, 'models', "model_weights.npy")) and\
+                   isfile(join(snapshot, 'args.file')) and\
+                   create_prcurve:
 
+                    with open(join(snapshot, "args.file"), "rb") as f:
+                        args = pickle.load(f)
 
-                if isfile(join(snapshot, 'models', "model_weights.npy")) and create_prcurve:
+                    file_path = up_Dir(os.getcwd(), 2)
 
-                    #try:
-                        with open(join(snapshot, "args.file"), "rb") as f:
-                            args = pickle.load(f)
+                    label_dims = {'cifar10': 10, 'cub': 200, 'nuswide_81': 81, 'coco': 80}
+                    Rs = {'cifar10': 54000, 'nuswide_81': 5000, 'coco': 5000}
+                    args.R = Rs[args.dataset]
+                    args.label_dim = label_dims[args.dataset]
 
-                        file_path = up_Dir(os.getcwd(), 2)
+                    args.img_tr = join(file_path, 'data', args.dataset, "train.txt")
+                    args.img_te = join(file_path, 'data', args.dataset, "test.txt")
+                    args.img_db = join(file_path, 'data', args.dataset, "database.txt")
 
-                        label_dims = {'cifar10': 10, 'cub': 200, 'nuswide_81': 81, 'coco': 80}
-                        Rs = {'cifar10': 54000, 'nuswide_81': 5000, 'coco': 5000}
-                        args.R = Rs[args.dataset]
-                        args.label_dim = label_dims[args.dataset]
+                    data_root = join(args.data_dir, args.dataset)
+                    query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
-                        args.img_tr = join(file_path, 'data', args.dataset, "train.txt")
-                        args.img_te = join(file_path, 'data', args.dataset, "test.txt")
-                        args.img_db = join(file_path, 'data', args.dataset, "database.txt")
+                    args.model_weights = join(snapshot, 'models', 'model_weights.npy')
 
-                        data_root = join(args.data_dir, args.dataset)
-                        query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
+                    args.evaluate_all_radiuses = 'full_range'
+                    args.gpus = gpus
 
-                        args.model_weights = join(snapshot, 'models', 'model_weights.npy')
+                    full_results, maps = model.validation(database_img, query_img, args)
 
-                        args.evaluate_all_radiuses = 'full_range'
-                        args.gpus = gpus
+                    np.savetxt(join(snapshot, 'full_results_'+snapshot+'.csv'), np.array(full_results).transpose(), delimiter=',')
 
-                        full_results, maps = model.validation(database_img, query_img, args)
-
-                        np.savetxt(join(snapshot, 'full_results_'+snapshot+'.csv'), np.array(full_results).transpose(), delimiter=',')
-
-                        plt.plot(full_results[0], full_results[1], color='green', linewidth=3,
-                                   marker='.', markerfacecolor='red', markersize=5)
-                        plt.savefig(join(snapshot, args.log_dir, 'pr_curve'+snapshot+'.png'))
-                        plt.xlabel('Recall')
-                        plt.ylabel('Precision')
-                        plt.clf()
-                        tf.reset_default_graph()
-                    #except:
-                    #    print("Arguments file was missing for ", snapshot)
+                    plt.plot(full_results[0], full_results[1], color='green', linewidth=3,
+                               marker='.', markerfacecolor='red', markersize=5)
+                    plt.savefig(join(snapshot, args.log_dir, 'pr_curve'+snapshot+'.png'))
+                    plt.xlabel('Recall')
+                    plt.ylabel('Precision')
+                    plt.clf()
+                    tf.reset_default_graph()
 
                 else:
                     if create_prcurve: print('No model weights file was found for ', snapshot)
