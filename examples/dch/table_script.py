@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from examples.dch import Arguments
 from examples.dch import up_Dir
+import shutil
 
 DEFAULT_ENDING = '__init__.py'
 
@@ -54,7 +55,7 @@ def write_csv(snapshot, map, st_deviation, recall, precision):
                  map, st_deviation, recall, precision, args['snapshot_folder']])
 
 def add_to_table(snapshots, table='default_table.csv',
-                 record_new_table=False, record_old_table=False, create_prcurve=True, gpus='0'):
+                 record_new_table=False, record_old_table=False, create_prcurve=True, save_pr_to_folder=True,gpus='0'):
 
     for snapshot in snapshots:
         if isdir(join(snapshot)):
@@ -64,39 +65,54 @@ def add_to_table(snapshots, table='default_table.csv',
                    isfile(join(snapshot, 'args.file')) and\
                    create_prcurve:
 
-                    with open(join(snapshot, "args.file"), "rb") as f:
-                        args = pickle.load(f)
+                    if (not isfile(join(snapshot, 'full_results_'+snapshot+'.csv'))):
 
-                    file_path = up_Dir(os.getcwd(), 2)
+                        try:
+                            with open(join(snapshot, "args.file"), "rb") as f:
+                                args = pickle.load(f)
 
-                    label_dims = {'cifar10': 10, 'cub': 200, 'nuswide_81': 81, 'coco': 80}
-                    Rs = {'cifar10': 54000, 'nuswide_81': 5000, 'coco': 5000}
-                    args.R = Rs[args.dataset]
-                    args.label_dim = label_dims[args.dataset]
+                            file_path = up_Dir(os.getcwd(), 2)
 
-                    args.img_tr = join(file_path, 'data', args.dataset, "train.txt")
-                    args.img_te = join(file_path, 'data', args.dataset, "test.txt")
-                    args.img_db = join(file_path, 'data', args.dataset, "database.txt")
+                            label_dims = {'cifar10': 10, 'cub': 200, 'nuswide_81': 81, 'coco': 80}
+                            Rs = {'cifar10': 54000, 'nuswide_81': 5000, 'coco': 5000}
+                            args.R = Rs[args.dataset]
+                            args.label_dim = label_dims[args.dataset]
 
-                    data_root = join(args.data_dir, args.dataset)
-                    query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
+                            args.img_tr = join(file_path, 'data', args.dataset, "train.txt")
+                            args.img_te = join(file_path, 'data', args.dataset, "test.txt")
+                            args.img_db = join(file_path, 'data', args.dataset, "database.txt")
 
-                    args.model_weights = join(snapshot, 'models', 'model_weights.npy')
+                            data_root = join(args.data_dir, args.dataset)
+                            query_img, database_img = dataset.import_validation(data_root, args.img_te, args.img_db)
 
-                    args.evaluate_all_radiuses = 'full_range'
-                    args.gpus = gpus
+                            args.model_weights = join(snapshot, 'models', 'model_weights.npy')
 
-                    full_results, maps = model.validation(database_img, query_img, args)
+                            args.evaluate_all_radiuses = 'full_range'
+                            args.gpus = gpus
 
-                    np.savetxt(join(snapshot, 'full_results_'+snapshot+'.csv'), np.array(full_results).transpose(), delimiter=',')
+                            args.batch_targets = False
+                            args.extract_features = False
 
-                    plt.plot(full_results[0], full_results[1], color='green', linewidth=3,
-                               marker='.', markerfacecolor='red', markersize=5)
-                    plt.savefig(join(snapshot, args.log_dir, 'pr_curve'+snapshot+'.png'))
-                    plt.xlabel('Recall')
-                    plt.ylabel('Precision')
-                    plt.clf()
-                    tf.reset_default_graph()
+                            full_results, maps = model.validation(database_img, query_img, args)
+
+                            np.savetxt(join(snapshot, 'full_results_'+snapshot+'.csv'), np.array(full_results).transpose(), delimiter=',')
+                            if save_pr_to_folder: np.savetxt(join('pr_curve_results_menelaos', 'full_results_' + snapshot + '.csv'),
+                                       np.array(full_results).transpose(), delimiter=',')
+
+                            plt.plot(full_results[0], full_results[1], color='green', linewidth=3,
+                                       marker='.', markerfacecolor='red', markersize=5)
+                            plt.savefig(join(snapshot, args.log_dir, 'pr_curve'+snapshot+'.png'))
+                            plt.xlabel('Recall')
+                            plt.ylabel('Precision')
+                            plt.clf()
+                            tf.reset_default_graph()
+                        except:
+                            print("Process failed for: ", snapshot)
+                    else:
+                        if save_pr_to_folder:
+                            if not os.path.exists(join('pr_curve_results_menelaos')): os.makedirs(join('pr_curve_results_menelaos'))
+                            shutil.copy(join(snapshot, 'full_results_'+snapshot+'.csv'),join('pr_curve_results_menelaos', 'full_results_' + snapshot + '.csv'))
+                            print('PR curve data exist, they were copied to the respective folder')
 
                 else:
                     if create_prcurve: print('No model weights file was found for ', snapshot)
@@ -132,9 +148,10 @@ def add_to_table(snapshots, table='default_table.csv',
         else:
             print("Directory ", snapshot, " was not found")
 
-snapshots = ['2019_7_7_14_0_32']
+snapshots = ['2019_10_4_8_45_5', '2019_7_7_14_0_36','2019_6_2_15_2_16','2019_9_30_18_49_44','2019_8_16_14_33_55', '2019_9_17_20_46_46','2019_8_13_13_26_8','2019_8_13_13_26_10','2019_10_11_13_27_7',
+                         '2019_8_18_15_21_33', '2019_10_10_10_47_52','2019_10_12_16_46_48','2019_10_9_16_37_53','2019_10_11_12_14_53','2019_10_8_14_46_3','2019_10_10_13_23_22']
 
-starting_snapshot = join('2019_7_7_14_0_32')
+starting_snapshot = join('')
 ending_snapshot = DEFAULT_ENDING
 
 
