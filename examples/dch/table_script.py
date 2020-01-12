@@ -67,7 +67,7 @@ def add_to_table(snapshots, table='default_table.csv',
 
                     if (not isfile(join(snapshot, 'full_results_'+snapshot+'.csv'))):
 
-                        try:
+                        #try:
                             with open(join(snapshot, "args.file"), "rb") as f:
                                 args = pickle.load(f)
 
@@ -90,13 +90,16 @@ def add_to_table(snapshots, table='default_table.csv',
                             args.evaluate_all_radiuses = 'full_range'
                             args.gpus = gpus
 
-                            args.batch_targets = False
+                            #args.batch_targets = False
                             args.extract_features = False
 
                             full_results, maps = model.validation(database_img, query_img, args)
 
                             np.savetxt(join(snapshot, 'full_results_'+snapshot+'.csv'), np.array(full_results).transpose(), delimiter=',')
-                            if save_pr_to_folder: np.savetxt(join('pr_curve_results_menelaos', 'full_results_' + snapshot + '.csv'),
+                            if save_pr_to_folder:
+                                if not os.path.exists(join('pr_curve_results_menelaos')): os.makedirs(
+                                    join('pr_curve_results_menelaos'))
+                                np.savetxt(join('pr_curve_results_menelaos', 'full_results_' + snapshot + '.csv'),
                                        np.array(full_results).transpose(), delimiter=',')
 
                             plt.plot(full_results[0], full_results[1], color='green', linewidth=3,
@@ -106,8 +109,8 @@ def add_to_table(snapshots, table='default_table.csv',
                             plt.ylabel('Precision')
                             plt.clf()
                             tf.reset_default_graph()
-                        except:
-                            print("Process failed for: ", snapshot)
+                        #except:
+                         #   print("Process failed for: ", snapshot)
                     else:
                         if save_pr_to_folder:
                             if not os.path.exists(join('pr_curve_results_menelaos')): os.makedirs(join('pr_curve_results_menelaos'))
@@ -148,8 +151,7 @@ def add_to_table(snapshots, table='default_table.csv',
         else:
             print("Directory ", snapshot, " was not found")
 
-snapshots = ['2019_10_4_8_45_5', '2019_7_7_14_0_36','2019_6_2_15_2_16','2019_9_30_18_49_44','2019_8_16_14_33_55', '2019_9_17_20_46_46','2019_8_13_13_26_8','2019_8_13_13_26_10','2019_10_11_13_27_7',
-                         '2019_8_18_15_21_33', '2019_10_10_10_47_52','2019_10_12_16_46_48','2019_10_9_16_37_53','2019_10_11_12_14_53','2019_10_8_14_46_3','2019_10_10_13_23_22']
+snapshots = ['2019_10_6_9_25_54','2019_9_24_18_9_12']
 
 starting_snapshot = join('')
 ending_snapshot = DEFAULT_ENDING
@@ -161,7 +163,7 @@ record_new_table = False
 record_old_table = False
 create_prcurve = True
 
-gpus = '1'
+gpus = '0'
 
 if __name__ == "__main__":
 
