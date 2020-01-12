@@ -109,8 +109,8 @@ class DCH(object):
         if hasattr(self, 'ter_regularizer') and not self.ter_regularizer == None:
             self.ter_regularizer, self.ter_loss_direction, self.ter_loss_scale, self.ter_knn_k = process_regularizer_input(self.ter_regularizer)
 
-
         if not self.extract_features and not self.batch_targets:
+
             self.targets = np.load(
             join(self.file_path, "DeepHash", "data_provider", "extracted_targets",
                  self.dataset, self.pretrn_layer + ".npy"))
@@ -188,8 +188,8 @@ class DCH(object):
     def feature_regularizer_check(self):
 
         return ((self.regularizer in feature_regulizers and self.regularization_factor > 0) or\
-                (self.sec_regularizer in feature_regulizers and self.sec_regularization_factor > 0) if hasattr(self, 'sec_regularizer') else False or\
-                (self.ter_regularizer in feature_regulizers and self.ter_regularization_factor > 0) if hasattr(self, 'ter_regularizer') else False)
+                ((self.sec_regularizer in feature_regulizers and self.sec_regularization_factor > 0) if hasattr(self, 'sec_regularizer') else False) or\
+                ((self.ter_regularizer in feature_regulizers and self.ter_regularization_factor > 0) if hasattr(self, 'ter_regularizer') else False))
 
     def batch_target_calculation(self):
 
