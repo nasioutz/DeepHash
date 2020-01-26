@@ -13,6 +13,8 @@ import tensorflow as tf
 from examples.dch import Arguments
 from examples.dch import up_Dir
 import shutil
+from collections import namedtuple
+import json
 
 DEFAULT_ENDING = '__init__.py'
 
@@ -62,14 +64,29 @@ def add_to_table(snapshots, table='default_table.csv',
             if isfile(join(snapshot, "models", "recuring_results.npy")):
 
                 if isfile(join(snapshot, 'models', "model_weights.npy")) and\
-                   isfile(join(snapshot, 'args.file')) and\
+                   (isfile(join(snapshot, 'args.file')) or isfile(join(snapshot, "log.txt"))) and\
                    create_prcurve:
 
                     if (not isfile(join(snapshot, 'full_results_'+snapshot+'.csv'))):
 
                         #try:
-                            with open(join(snapshot, "args.file"), "rb") as f:
-                                args = pickle.load(f)
+                            if isfile(join(snapshot, 'args.file')):
+                                with open(join(snapshot, "args.file"), "rb") as f:
+                                    args = pickle.load(f)
+                            elif isfile(join(snapshot, "log.txt")):
+
+                                inf = open(join(snapshot, 'log.txt'), 'r')
+                                args_text = inf.readline()[1:-2]
+                                args_dict = eval(args_text)
+                                inf.close()
+
+                                args = Arguments(save_arguments=False)
+
+                                for arg, value in args_dict.items():
+                                    exec("args." + arg + " = value")
+
+                                if args.regularizer=='average':
+                                    args.regularizer = 'reduce_batch_center_distance'
 
                             file_path = up_Dir(os.getcwd(), 2)
 
@@ -90,7 +107,6 @@ def add_to_table(snapshots, table='default_table.csv',
                             args.evaluate_all_radiuses = 'full_range'
                             args.gpus = gpus
 
-                            #args.batch_targets = False
                             args.extract_features = False
 
                             full_results, maps = model.validation(database_img, query_img, args)
@@ -151,7 +167,7 @@ def add_to_table(snapshots, table='default_table.csv',
         else:
             print("Directory ", snapshot, " was not found")
 
-snapshots = ['2019_10_6_9_25_54','2019_9_24_18_9_12']
+snapshots = ['2019_6_2_15_2_16']
 
 starting_snapshot = join('')
 ending_snapshot = DEFAULT_ENDING
